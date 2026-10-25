@@ -41,7 +41,18 @@ export default function HomePage() {
     <>
       <Header />
       <main>
-        <section id="inicio" className="relative isolate overflow-hidden bg-[#092B52] text-white">
+        
+<section
+  id="inicio"
+  className="relative isolate overflow-hidden bg-[#092B52] text-white"
+  style={{
+    backgroundImage:
+      "linear-gradient(rgba(9,43,82,0.72), rgba(9,43,82,0.78)), url('/hero-call-center.jpeg')",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+  }}
+>
+
           <div className="absolute inset-0 -z-10 opacity-40" aria-hidden="true">
             <div className="absolute -right-24 -top-40 h-[540px] w-[540px] rounded-full border border-white/10" />
             <div className="absolute -right-4 -top-20 h-[380px] w-[380px] rounded-full border border-white/10" />
