@@ -1,4 +1,6 @@
-
+export async function GET() {
+  return Response.json({ ok: true, rota: "contactos" });
+}
 export async function POST(request: Request) {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
