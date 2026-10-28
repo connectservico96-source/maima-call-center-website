@@ -1,4 +1,4 @@
-
+```tsx
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
@@ -42,8 +42,13 @@ export default function RecuperarPasswordPage() {
             await supabase.auth.exchangeCodeForSession(code);
 
           if (exchangeError) {
+            console.error(
+              "Erro ao validar recuperação:",
+              exchangeError.message
+            );
+
             setError(
-              "Não foi possível validar o link. Solicita um novo e-mail de recuperação."
+              `Não foi possível validar o link: ${exchangeError.message}`
             );
             return;
           }
@@ -62,14 +67,20 @@ export default function RecuperarPasswordPage() {
         const refreshToken = hash.get("refresh_token");
 
         if (accessToken && refreshToken) {
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
+          const { error: sessionError } =
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
 
           if (sessionError) {
+            console.error(
+              "Erro ao validar sessão de recuperação:",
+              sessionError.message
+            );
+
             setError(
-              "O link de recuperação expirou ou é inválido. Solicita um novo e-mail."
+              `O link de recuperação não pôde ser validado: ${sessionError.message}`
             );
             return;
           }
@@ -94,8 +105,12 @@ export default function RecuperarPasswordPage() {
             "Abre o link mais recente que recebeste por e-mail para alterar a palavra-passe."
           );
         }
-      } catch {
-        setError("Ocorreu um erro ao validar o link. Tenta novamente.");
+      } catch (err) {
+        console.error("Erro inesperado na recuperação:", err);
+
+        setError(
+          "Ocorreu um erro ao validar o link. Tenta novamente."
+        );
       } finally {
         setCheckingSession(false);
       }
@@ -110,7 +125,9 @@ export default function RecuperarPasswordPage() {
     setError("");
 
     if (!recoveryReady) {
-      setError("Valida primeiro o link de recuperação recebido por e-mail.");
+      setError(
+        "Valida primeiro o link de recuperação recebido por e-mail."
+      );
       return;
     }
 
@@ -128,13 +145,18 @@ export default function RecuperarPasswordPage() {
 
     try {
       const supabase = createClient();
-      const { error: updateError } = await supabase.auth.updateUser({
-        password,
-      });
+
+      const { error: updateError } =
+        await supabase.auth.updateUser({ password });
 
       if (updateError) {
+        console.error(
+          "Erro ao alterar palavra-passe:",
+          updateError.message
+        );
+
         setError(
-          "Não foi possível alterar a palavra-passe. Solicita um novo link de recuperação."
+          `Não foi possível alterar a palavra-passe: ${updateError.message}`
         );
         return;
       }
@@ -142,14 +164,19 @@ export default function RecuperarPasswordPage() {
       setMessage(
         "Palavra-passe alterada com sucesso. Já podes iniciar sessão."
       );
+
       setPassword("");
       setConfirmPassword("");
 
       setTimeout(() => {
         router.replace("/login");
       }, 2000);
-    } catch {
-      setError("Ocorreu um erro. Solicita um novo link e tenta novamente.");
+    } catch (err) {
+      console.error("Erro inesperado ao guardar palavra-passe:", err);
+
+      setError(
+        "Ocorreu um erro inesperado. Tenta novamente."
+      );
     } finally {
       setLoading(false);
     }
@@ -162,82 +189,4 @@ export default function RecuperarPasswordPage() {
           MAIMA CALL CENTER
         </p>
 
-        <h1 className="mb-2 text-3xl font-bold text-gray-900">
-          Nova palavra-passe
-        </h1>
-
-        <p className="mb-8 text-sm text-gray-600">
-          Define uma nova palavra-passe para a tua conta.
-        </p>
-
-        {checkingSession && (
-          <p role="status" className="mb-5 text-sm text-gray-600">
-            A validar o link de recuperação...
-          </p>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-2 block text-sm font-medium text-gray-700"
-            >
-              Nova palavra-passe
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              required
-              disabled={!recoveryReady || checkingSession || loading}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-3 outline-none focus:border-blue-600 disabled:bg-gray-100"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="confirmPassword"
-              className="mb-2 block text-sm font-medium text-gray-700"
-            >
-              Confirmar palavra-passe
-            </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              required
-              disabled={!recoveryReady || checkingSession || loading}
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-3 outline-none focus:border-blue-600 disabled:bg-gray-100"
-            />
-          </div>
-
-          {error && (
-            <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-
-          {message && (
-            <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
-              {message}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={!recoveryReady || checkingSession || loading}
-            className="w-full rounded-lg bg-gray-900 px-4 py-3 font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
-          >
-            {loading ? "A guardar..." : "Alterar palavra-passe"}
-          </button>
-        </form>
-      </section>
-    </main>
-  );
-}
+        <h1 className="mb-2 text-3
