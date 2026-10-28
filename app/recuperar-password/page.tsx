@@ -1,4 +1,3 @@
-
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
@@ -172,7 +171,10 @@ export default function RecuperarPasswordPage() {
         router.replace("/login");
       }, 2000);
     } catch (err) {
-      console.error("Erro inesperado ao guardar palavra-passe:", err);
+      console.error(
+        "Erro inesperado ao guardar palavra-passe:",
+        err
+      );
 
       setError(
         "Ocorreu um erro inesperado. Tenta novamente."
@@ -189,4 +191,92 @@ export default function RecuperarPasswordPage() {
           MAIMA CALL CENTER
         </p>
 
-        <h1 className="mb-2 text-3
+        <h1 className="mb-2 text-3xl font-bold text-gray-900">
+          Nova palavra-passe
+        </h1>
+
+        <p className="mb-8 text-sm text-gray-600">
+          Define uma nova palavra-passe para a tua conta.
+        </p>
+
+        {checkingSession && (
+          <p role="status" className="mb-5 text-sm text-gray-600">
+            A validar o link de recuperação...
+          </p>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label
+              htmlFor="password"
+              className="mb-2 block text-sm font-medium text-gray-700"
+            >
+              Nova palavra-passe
+            </label>
+
+            <input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              disabled={!recoveryReady || checkingSession || loading}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-3 outline-none focus:border-blue-600 disabled:bg-gray-100"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="confirmPassword"
+              className="mb-2 block text-sm font-medium text-gray-700"
+            >
+              Confirmar palavra-passe
+            </label>
+
+            <input
+              id="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              disabled={!recoveryReady || checkingSession || loading}
+              value={confirmPassword}
+              onChange={(event) =>
+                setConfirmPassword(event.target.value)
+              }
+              className="w-full rounded-lg border border-gray-300 px-3 py-3 outline-none focus:border-blue-600 disabled:bg-gray-100"
+            />
+          </div>
+
+          {error && (
+            <p
+              role="alert"
+              className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
+            >
+              {error}
+            </p>
+          )}
+
+          {message && (
+            <p
+              role="status"
+              className="rounded-lg bg-green-50 p-3 text-sm text-green-700"
+            >
+              {message}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={!recoveryReady || checkingSession || loading}
+            className="w-full rounded-lg bg-gray-900 px-4 py-3 font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
+          >
+            {loading ? "A guardar..." : "Alterar palavra-passe"}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
