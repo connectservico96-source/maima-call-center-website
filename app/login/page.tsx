@@ -1,4 +1,3 @@
-
 "use client";
 
 import { FormEvent, useState } from "react";
@@ -54,9 +53,12 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
+      const callbackUrl = new URL("/auth/callback", window.location.origin);
+      callbackUrl.searchParams.set("next", "/recuperar-password");
+
       const { error: recoveryError } =
         await supabase.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: `${window.location.origin}/recuperar-password`,
+          redirectTo: callbackUrl.toString(),
         });
 
       if (recoveryError) {
