@@ -26,7 +26,7 @@ export default function RecuperarPasswordPage() {
         const params = url.searchParams;
         const hash = new URLSearchParams(url.hash.slice(1));
 
-        if (params.has("error") || hash.has("error")) {
+        if (params.has("erro") || params.has("error") || hash.has("error")) {
           setError(
             "O link de recuperação expirou ou é inválido. Solicita um novo e-mail e abre o link mais recente."
           );
@@ -34,34 +34,6 @@ export default function RecuperarPasswordPage() {
         }
 
         const supabase = createClient();
-        const code = params.get("code");
-
-        if (code) {
-          const { error: exchangeError } =
-            await supabase.auth.exchangeCodeForSession(code);
-
-          if (exchangeError) {
-            console.error(
-              "Erro ao validar recuperação:",
-              exchangeError.message
-            );
-
-            setError(
-              `Não foi possível validar o link: ${exchangeError.message}`
-            );
-            return;
-          }
-
-          window.history.replaceState(
-            {},
-            document.title,
-            window.location.pathname
-          );
-
-          setRecoveryReady(true);
-          return;
-        }
-
         const accessToken = hash.get("access_token");
         const refreshToken = hash.get("refresh_token");
 
