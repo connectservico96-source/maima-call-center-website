@@ -49,7 +49,7 @@ export async function POST(request: Request) {
           host: "smtp.gmail.com",
           port: 465,
           secure: true,
-          auth: { user: gmailUser, pass: gmailPassword.replace(/\\s/g, "") },
+          auth: { user: gmailUser, pass: gmailPassword.replace(/\s/g, "") },
         });
         await transporter.sendMail({
           from: { name: "MAIMA CALL CENTER", address: gmailUser },
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
             "",
             "Mensagem:",
             mensagem,
-          ].join("\\n"),
+          ].join("\n"),
         });
       }
     } catch (emailError) {
