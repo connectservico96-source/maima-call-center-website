@@ -65,7 +65,7 @@ export async function POST(request: Request) {
             "",
             "Mensagem:",
             mensagem,
-          ].join("\n"),
+          ].join(String.fromCharCode(13, 10)),
         });
       }
     } catch (emailError) {
