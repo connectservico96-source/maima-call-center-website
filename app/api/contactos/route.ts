@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import nodemailer from "nodemailer";
 
 export async function GET() {
   return Response.json({ ok: true, rota: "contactos" });
@@ -36,6 +37,39 @@ export async function POST(request: Request) {
     if (error) {
       console.error("Supabase insert falhou:", error.message);
       return Response.json({ error: "Não foi possível guardar o pedido. Tente novamente." }, { status: 502 });
+    }
+
+    try {
+      const gmailUser = process.env.GMAIL_USER;
+      const gmailPassword = process.env.GMAIL_APP_PASSWORD;
+      const notificationEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
+
+      if (gmailUser && gmailPassword && notificationEmail) {
+        const transporter = nodemailer.createTransport({
+          host: "smtp.gmail.com",
+          port: 465,
+          secure: true,
+          auth: { user: gmailUser, pass: gmailPassword.replace(/\\s/g, "") },
+        });
+        await transporter.sendMail({
+          from: { name: "MAIMA CALL CENTER", address: gmailUser },
+          to: notificationEmail,
+          subject: `Novo pedido recebido — ${nome}`,
+          text: [
+            "Foi recebido um novo pedido através do website MAIMA CALL CENTER.",
+            "",
+            `Nome: ${nome}`,
+            `Empresa: ${empresa}`,
+            `E-mail: ${email}`,
+            `Área de interesse: ${area}`,
+            "",
+            "Mensagem:",
+            mensagem,
+          ].join("\\n"),
+        });
+      }
+    } catch (emailError) {
+      console.error("Falha ao enviar aviso por e-mail:", emailError);
     }
 
     return Response.json({ success: true });
