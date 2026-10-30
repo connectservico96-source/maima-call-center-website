@@ -51,6 +51,10 @@ export async function POST(request: Request) {
           secure: true,
           auth: { user: gmailUser, pass: gmailPassword.replace(/\s/g, "") },
         });
+        const escapeHtml = (value: string) =>
+          value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
         await transporter.sendMail({
           from: { name: "MAIMA CALL CENTER", address: gmailUser },
           to: notificationEmail,
@@ -65,7 +69,17 @@ export async function POST(request: Request) {
             "",
             "Mensagem:",
             mensagem,
-          ].join(String.fromCharCode(13, 10)),
+          ].join("\n"),
+          html: `
+            <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222">
+              <p>Foi recebido um novo pedido através do website <strong>MAIMA CALL CENTER</strong>.</p>
+              <p><strong>Nome:</strong> ${escapeHtml(nome)}<br>
+              <strong>Empresa:</strong> ${escapeHtml(empresa)}<br>
+              <strong>E-mail:</strong> ${escapeHtml(email)}<br>
+              <strong>Área de interesse:</strong> ${escapeHtml(area)}</p>
+              <p><strong>Mensagem:</strong><br>${escapeHtml(mensagem).replace(/\r?\n/g, "<br>")}</p>
+            </div>
+          `,
         });
       }
     } catch (emailError) {
