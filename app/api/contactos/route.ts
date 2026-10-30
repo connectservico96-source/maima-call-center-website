@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import nodemailer from "nodemailer";
 
 export async function GET() {
   return Response.json({ ok: true, rota: "contactos" });
