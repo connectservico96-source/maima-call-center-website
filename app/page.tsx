@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import Header from "@/components/Header";
 import ContactForm from "@/components/ContactForm";
+import InviteRecoveryRedirect from "@/components/InviteRecoveryRedirect";
 
 const services = [
   {
@@ -39,6 +40,7 @@ const principles = [
 export default function HomePage() {
   return (
     <>
+      <InviteRecoveryRedirect />
       <Header />
       <main>
         
