@@ -30,6 +30,7 @@ export default function ClientePainelPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [signingOut, setSigningOut] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -53,13 +54,34 @@ export default function ClientePainelPage() {
       setError("Não foi possível carregar os seus pedidos. Tente novamente.");
     } else {
       setPedidos((data ?? []) as Pedido[]);
+      setLastUpdated(new Date());
     }
     setLoading(false);
   }, [router]);
 
+  const refreshPedidos = useCallback(async () => {
+    const supabase = createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return;
+    const { data, error: queryError } = await supabase
+      .from("contactos")
+      .select("id,nome,empresa,area_interesse,mensagem,estado,criado_em")
+      .eq("user_id", user.id)
+      .order("criado_em", { ascending: false });
+    if (!queryError) {
+      setPedidos((data ?? []) as Pedido[]);
+      setLastUpdated(new Date());
+    }
+  }, []);
+
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => { void refreshPedidos(); }, 30000);
+    return () => window.clearInterval(timer);
+  }, [refreshPedidos]);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -97,7 +119,7 @@ export default function ClientePainelPage() {
             <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">O seu espaço</h1>
             <p className="mt-2 text-slate-600">{email}</p>
           </div>
-          <button type="button" onClick={() => void loadDashboard()} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          <button type="button" onClick={() => void refreshPedidos()} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             Actualizar pedidos
           </button>
         </div>
