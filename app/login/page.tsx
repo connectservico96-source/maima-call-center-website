@@ -4,6 +4,8 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+const ADMIN_EMAIL = "connectservico96@gmail.com";
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -21,17 +23,22 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
-      const { error: loginError } = await supabase.auth.signInWithPassword({
-        email,
+      const { data, error: loginError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
         password,
       });
 
-      if (loginError) {
+      if (loginError || !data.user) {
         setError("Não foi possível entrar. Verifica o e-mail e a palavra-passe.");
         return;
       }
 
-      router.replace("/cliente/painel");
+      const destination =
+        (data.user.email ?? "").trim().toLowerCase() === ADMIN_EMAIL
+          ? "/admin"
+          : "/cliente/painel";
+
+      router.replace(destination);
       router.refresh();
     } catch {
       setError("Ocorreu um erro. Tenta novamente.");
