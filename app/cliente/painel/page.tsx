@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import ComprovativosCliente from "./comprovativos";
 
 type Pedido = { id:number; nome:string; empresa:string|null; area_interesse:string|null; mensagem:string; estado:string; criado_em:string };
 type Fatura = { id:number; referencia:string; valor:number; moeda:string; estado_pagamento:string; data_emissao:string; data_vencimento:string|null };
@@ -64,6 +65,7 @@ export default function ClientePainelPage() {
         {!invoiceError&&faturas.length===0&&<div className="mt-6 rounded-xl bg-slate-50 p-8 text-center"><h3 className="font-semibold">Ainda não existem facturas</h3><p className="mt-2 text-sm text-slate-600">Quando a MAIMA emitir uma factura associada à sua conta, ela aparecerá aqui.</p></div>}
         {faturas.length>0&&<div className="mt-6 space-y-3">{faturas.map(f=><article key={f.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 p-5"><div><p className="font-semibold">{f.referencia}</p><p className="mt-1 text-lg font-bold text-slate-900">{Number(f.valor).toLocaleString("pt-PT",{minimumFractionDigits:2,maximumFractionDigits:2})} {f.moeda}</p><p className="mt-1 text-xs text-slate-500">Emissão: {formatDate(f.data_emissao)} · Vencimento: {f.data_vencimento?formatDate(f.data_vencimento):"Não definido"}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${pagamentoClasses[f.estado_pagamento]??"bg-slate-100 text-slate-700"}`}>{f.estado_pagamento}</span></article>)}</div>}
       </section>
+      <ComprovativosCliente />
     </section>
   </main>;
 }
