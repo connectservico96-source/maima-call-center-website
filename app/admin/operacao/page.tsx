@@ -86,21 +86,30 @@ export default function OperacaoPage() {
     if (!current.ativo) { await db.auth.signOut(); router.replace("/login"); return; }
     if (!["admin","coordenador","operador"].includes(current.role)) { router.replace("/cliente/painel"); return; }
     setProfile(current);
-    const [c, t, camp, l, ca, co, q, finance] = await Promise.all([
+    const [c, t, camp, conditions, l, ca, co, q, finance] = await Promise.all([
       db.from("maima_clientes").select("id,nome_empresa,estado").order("nome_empresa"),
       db.from("maima_perfis").select("user_id,nome,email,role,cliente_id,ativo").in("role",["operador","coordenador","admin"]).order("role"),
-      db.from("maima_campanhas").select("id,cliente_id,codigo,nome,setor,mercado,estado,data_inicio,data_fim,guiao_comercial,valor_por_contrato_validado,moeda").order("criado_em",{ascending:false}),
+      db.from("maima_campanhas").select("id,cliente_id,codigo,nome,setor,mercado,estado,data_inicio,data_fim,guiao_comercial").order("criado_em",{ascending:false}),
+      db.from("maima_campanha_condicoes").select("campanha_id,valor_por_contrato_validado,moeda"),
       db.from("maima_leads").select("id,campanha_id,nome,telefone,email,origem,autorizacao_utilizacao,autorizacao_referencia,autorizacao_validada_por,estado,operador_id,observacoes_operador,proxima_acao_em,nao_contactar,criado_em").order("criado_em",{ascending:false}),
       db.from("maima_chamadas").select("id,lead_id,campanha_id,operador_id,chamada_em,tentativa_numero,resultado,duracao_segundos,notas,retorno_em,consentimento_confirmado,consentimento_em").order("chamada_em",{ascending:false}),
       db.from("maima_contratos").select("id,lead_id,campanha_id,operador_id,referencia_externa,estado,submetido_em,validado_em,motivo_rejeicao,motivo_cancelamento").order("submetido_em",{ascending:false}),
       db.from("maima_qualidade").select("id,operador_id,pontuacao,falhas_identificadas,acao_corretiva,avaliado_em").order("avaliado_em",{ascending:false}),
       db.from("maima_comissoes_contratos").select("id,contrato_id,campanha_id,operador_id,valor,moeda,estado").order("atualizado_em",{ascending:false}),
     ]);
-    const firstError = [c.error,t.error,camp.error,l.error,ca.error,co.error,q.error,finance.error].find(Boolean);
+    const firstError = [c.error,t.error,camp.error,conditions.error,l.error,ca.error,co.error,q.error,finance.error].find(Boolean);
     if (firstError) setError("Alguns dados não puderam ser carregados: " + firstError.message);
     setClientes((c.data??[]) as Cliente[]);
     setTeam((t.data??[]) as Profile[]);
-    setCampaigns((camp.data??[]) as Campaign[]);
+    const conditionMap = new Map<string,{valor_por_contrato_validado:number|null;moeda:string}>(
+      ((conditions.data??[]) as {campanha_id:string;valor_por_contrato_validado:number|null;moeda:string}[])
+        .map(row=>[row.campanha_id,{valor_por_contrato_validado:row.valor_por_contrato_validado,moeda:row.moeda}])
+    );
+    setCampaigns(((camp.data??[]) as Omit<Campaign,"valor_por_contrato_validado"|"moeda">[]).map(c=>({
+      ...c,
+      valor_por_contrato_validado:conditionMap.get(c.id)?.valor_por_contrato_validado??null,
+      moeda:conditionMap.get(c.id)?.moeda??"EUR",
+    })));
     setLeads((l.data??[]) as Lead[]);
     setCalls((ca.data??[]) as Call[]);
     setContracts((co.data??[]) as Contract[]);
