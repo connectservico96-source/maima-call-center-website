@@ -13,6 +13,11 @@ export async function POST(request: Request) {
     const email = String(body.email ?? "").trim();
     const area = String(body.interest ?? "").trim();
     const mensagem = String(body.message ?? "").trim() || "Sem mensagem";
+    const privacidadeAceite = body.privacyAccepted === true;
+
+    if (!privacidadeAceite) {
+      return Response.json({ error: "Confirme a informação de privacidade para enviar o pedido." }, { status: 400 });
+    }
 
     if (!nome || !empresa || !email || !area) {
       return Response.json({ error: "Preencha todos os campos obrigatórios." }, { status: 400 });
@@ -31,6 +36,9 @@ export async function POST(request: Request) {
       email,
       area_interesse: area,
       mensagem,
+      privacidade_aceite: true,
+      privacidade_aceite_em: new Date().toISOString(),
+      versao_privacidade: "2026-11-15-v1",
       ...(user ? { user_id: user.id } : {}),
     });
 
