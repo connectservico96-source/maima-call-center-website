@@ -14,7 +14,7 @@ export default function Header() {
     <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur">
       <div className="container flex min-h-[78px] items-center justify-between gap-3 sm:gap-6">
         <Link href="#inicio" aria-label="MAIMA CALL CENTER — início" className="flex min-w-0 shrink items-center">
-          <Image src="/logo.png" alt="MAIMA CALL CENTER" width={260} height={88} priority className="h-auto w-[160px] xs:w-[180px] sm:w-[225px]" />
+          <Image src="/logo.png" alt="MAIMA CALL CENTER" width={260} height={88} priority className="h-auto w-[168px] sm:w-[225px]" />
         </Link>
         <nav aria-label="Navegação principal" className="hidden items-center gap-8 md:flex">
           {links.map((link) => (
