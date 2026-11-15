@@ -28,7 +28,7 @@ export default function RegistarPage() {
         password,
         options: {
           emailRedirectTo: new URL("/login", window.location.origin).toString(),
-          data: { nome: nome.trim(), full_name: nome.trim(), empresa: empresa.trim(), telefone: telefone.trim() },
+          data: { nome: nome.trim(), full_name: nome.trim(), empresa: empresa.trim(), telefone: telefone.trim(), aceitou_privacidade: true, versao_privacidade: "2026-11-15-v1" },
         },
       });
       if (signUpError) throw signUpError;
