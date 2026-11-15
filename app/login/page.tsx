@@ -33,9 +33,23 @@ export default function LoginPage() {
         return;
       }
 
-      const destination =
-        (data.user.email ?? "").trim().toLowerCase() === ADMIN_EMAIL
-          ? "/admin"
+      const { data: profile } = await supabase
+        .from("maima_perfis")
+        .select("role,ativo")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+
+      if (profile && profile.ativo === false) {
+        await supabase.auth.signOut();
+        setError("Esta conta está suspensa. Contacte a administração da MAIMA.");
+        return;
+      }
+
+      const role = profile?.role || ((data.user.email ?? "").trim().toLowerCase() === ADMIN_EMAIL ? "admin" : "cliente");
+      const destination = role === "admin"
+        ? "/admin"
+        : role === "coordenador" || role === "operador"
+          ? "/admin/operacao"
           : "/cliente/painel";
 
       router.replace(destination);
@@ -159,6 +173,7 @@ export default function LoginPage() {
             {loading ? "A entrar..." : "Entrar"}
           </button>
         </form>
+        <p className="mt-6 text-center text-sm text-gray-600">Ainda não tem conta? <a href="/registar" className="font-semibold text-blue-700 underline">Criar conta de cliente</a></p>
       </section>
     </main>
   );
