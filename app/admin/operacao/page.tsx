@@ -10,7 +10,7 @@ type Cliente = { id: string; nome_empresa: string; estado: string };
 type Campaign = { id: string; cliente_id: string; codigo: string; nome: string; setor: string; mercado: string; estado: string; valor_por_contrato_validado: number | null; moeda: string };
 type Lead = { id: string; campanha_id: string; nome: string; telefone: string | null; email: string | null; origem: string; autorizacao_utilizacao: string; estado: string; operador_id: string | null; observacoes_operador: string | null; proxima_acao_em: string | null; nao_contactar: boolean };
 type Call = { id: string; lead_id: string; campanha_id: string; operador_id: string; chamada_em: string; resultado: string; duracao_segundos: number | null; notas: string | null; retorno_em: string | null; consentimento_confirmado: boolean };
-type Contract = { id: string; lead_id: string; campanha_id: string; operador_id: string; referencia_externa: string | null; estado: string; submetido_em: string; validado_em: string | null; motivo_rejeicao: string | null; motivo_cancelamento: string | null; valor_comissao: number | null };
+type Contract = { id: string; lead_id: string; campanha_id: string; operador_id: string; referencia_externa: string | null; estado: string; submetido_em: string; validado_em: string | null; motivo_rejeicao: string | null; motivo_cancelamento: string | null };
 type Quality = { id: string; operador_id: string; pontuacao: number; falhas_identificadas: string | null; acao_corretiva: string | null; avaliado_em: string };
 
 const LEAD_STATES = ["nova","atribuida","em_contacto","qualificada","proposta_apresentada","contrato_submetido","sem_interesse","nao_contactar","fechada"];
@@ -90,7 +90,7 @@ export default function OperacaoPage() {
       db.from("maima_campanhas").select("id,cliente_id,codigo,nome,setor,mercado,estado,valor_por_contrato_validado,moeda").order("criado_em",{ascending:false}),
       db.from("maima_leads").select("id,campanha_id,nome,telefone,email,origem,autorizacao_utilizacao,estado,operador_id,observacoes_operador,proxima_acao_em,nao_contactar").order("criado_em",{ascending:false}),
       db.from("maima_chamadas").select("id,lead_id,campanha_id,operador_id,chamada_em,resultado,duracao_segundos,notas,retorno_em,consentimento_confirmado").order("chamada_em",{ascending:false}),
-      db.from("maima_contratos").select("id,lead_id,campanha_id,operador_id,referencia_externa,estado,submetido_em,validado_em,motivo_rejeicao,motivo_cancelamento,valor_comissao").order("submetido_em",{ascending:false}),
+      db.from("maima_contratos").select("id,lead_id,campanha_id,operador_id,referencia_externa,estado,submetido_em,validado_em,motivo_rejeicao,motivo_cancelamento").order("submetido_em",{ascending:false}),
       db.from("maima_qualidade").select("id,operador_id,pontuacao,falhas_identificadas,acao_corretiva,avaliado_em").order("avaliado_em",{ascending:false}),
     ]);
     const firstError = [c.error,t.error,camp.error,l.error,ca.error,co.error,q.error].find(Boolean);
@@ -221,7 +221,8 @@ export default function OperacaoPage() {
     e.preventDefault();
     if(!profile)return;
     if(lead.autorizacao_utilizacao!=="autorizada" || lead.nao_contactar){setError("Esta lead não está autorizada para contacto.");return;}
-    const fd=new FormData(e.currentTarget);
+    const form=e.currentTarget;
+    const fd=new FormData(form);
     setSaving(true);setError("");setNotice("");
     const {error:insertError}=await createClient().from("maima_chamadas").insert({
       lead_id:lead.id,campanha_id:lead.campanha_id,operador_id:profile.user_id,
@@ -234,7 +235,7 @@ export default function OperacaoPage() {
       consentimento_em:fd.get("consentimento_confirmado")==="on"?new Date().toISOString():null,
     });
     if(insertError) setError("Não foi possível registar a chamada: "+insertError.message);
-    else {setNotice("Chamada registada.");e.currentTarget.reset();await load();}
+    else {setNotice("Chamada registada.");form.reset();await load();}
     setSaving(false);
   }
 
