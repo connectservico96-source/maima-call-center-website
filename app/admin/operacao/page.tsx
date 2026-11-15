@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 type Profile = { user_id: string; nome: string | null; email: string; role: string; cliente_id: string | null; ativo: boolean };
 type Cliente = { id: string; nome_empresa: string; estado: string };
 type Campaign = { id: string; cliente_id: string; codigo: string; nome: string; setor: string; mercado: string; estado: string; data_inicio: string | null; data_fim: string | null; guiao_comercial: string | null; valor_por_contrato_validado: number | null; moeda: string };
-type Lead = { id: string; campanha_id: string; nome: string; telefone: string | null; email: string | null; origem: string; autorizacao_utilizacao: string; estado: string; operador_id: string | null; observacoes_operador: string | null; proxima_acao_em: string | null; nao_contactar: boolean };
+type Lead = { id: string; campanha_id: string; nome: string; telefone: string | null; email: string | null; origem: string; autorizacao_utilizacao: string; autorizacao_referencia: string | null; autorizacao_validada_por: string | null; estado: string; operador_id: string | null; observacoes_operador: string | null; proxima_acao_em: string | null; nao_contactar: boolean };
 type Call = { id: string; lead_id: string; campanha_id: string; operador_id: string; chamada_em: string; resultado: string; duracao_segundos: number | null; notas: string | null; retorno_em: string | null; consentimento_confirmado: boolean };
 type Contract = { id: string; lead_id: string; campanha_id: string; operador_id: string; referencia_externa: string | null; estado: string; submetido_em: string; validado_em: string | null; motivo_rejeicao: string | null; motivo_cancelamento: string | null };
 type Quality = { id: string; operador_id: string; pontuacao: number; falhas_identificadas: string | null; acao_corretiva: string | null; avaliado_em: string };
@@ -67,7 +67,7 @@ export default function OperacaoPage() {
   const [error,setError] = useState("");
   const [notice,setNotice] = useState("");
   const [campaignForm,setCampaignForm] = useState({cliente_id:"",codigo:"",nome:"",setor:"Energia",mercado:"Portugal",data_inicio:"",data_fim:"",valor:"",guiao_comercial:""});
-  const [leadForm,setLeadForm] = useState({campanha_id:"",nome:"",telefone:"",email:"",origem:"Lead fornecida pelo contratante",operador_id:"",autorizacao_utilizacao:"pendente"});
+  const [leadForm,setLeadForm] = useState({campanha_id:"",nome:"",telefone:"",email:"",origem:"Lead fornecida pelo contratante",operador_id:"",autorizacao_utilizacao:"pendente",autorizacao_referencia:""});
   const [contractRef,setContractRef] = useState<Record<string,string>>({});
   const [contractReason,setContractReason] = useState<Record<string,string>>({});
   const [qualityForm,setQualityForm] = useState({chamada_id:"",pontuacao:"90",falhas_identificadas:"",acao_corretiva:"",identificacao:false,finalidade:false,proposta:false,consentimento:false,sem_pressao:false,dados_confirmados:false});
@@ -90,7 +90,7 @@ export default function OperacaoPage() {
       db.from("maima_clientes").select("id,nome_empresa,estado").order("nome_empresa"),
       db.from("maima_perfis").select("user_id,nome,email,role,cliente_id,ativo").in("role",["operador","coordenador","admin"]).order("role"),
       db.from("maima_campanhas").select("id,cliente_id,codigo,nome,setor,mercado,estado,data_inicio,data_fim,guiao_comercial,valor_por_contrato_validado,moeda").order("criado_em",{ascending:false}),
-      db.from("maima_leads").select("id,campanha_id,nome,telefone,email,origem,autorizacao_utilizacao,estado,operador_id,observacoes_operador,proxima_acao_em,nao_contactar").order("criado_em",{ascending:false}),
+      db.from("maima_leads").select("id,campanha_id,nome,telefone,email,origem,autorizacao_utilizacao,autorizacao_referencia,autorizacao_validada_por,estado,operador_id,observacoes_operador,proxima_acao_em,nao_contactar").order("criado_em",{ascending:false}),
       db.from("maima_chamadas").select("id,lead_id,campanha_id,operador_id,chamada_em,resultado,duracao_segundos,notas,retorno_em,consentimento_confirmado").order("chamada_em",{ascending:false}),
       db.from("maima_contratos").select("id,lead_id,campanha_id,operador_id,referencia_externa,estado,submetido_em,validado_em,motivo_rejeicao,motivo_cancelamento").order("submetido_em",{ascending:false}),
       db.from("maima_qualidade").select("id,operador_id,pontuacao,falhas_identificadas,acao_corretiva,avaliado_em").order("avaliado_em",{ascending:false}),
@@ -150,16 +150,20 @@ export default function OperacaoPage() {
   async function createLead(e:FormEvent<HTMLFormElement>) {
     e.preventDefault(); setSaving(true); setError(""); setNotice("");
     const authorised=leadForm.autorizacao_utilizacao==="autorizada";
+    if(authorised&&!leadForm.autorizacao_referencia.trim()){setError("Indique a referência do documento ou autorização do contratante antes de libertar a lead para chamadas.");return;}
+    setSaving(true);
     const {error:insertError}=await createClient().from("maima_leads").insert({
       campanha_id:leadForm.campanha_id,nome:leadForm.nome.trim(),telefone:leadForm.telefone.trim()||null,
       email:leadForm.email.trim()||null,origem:leadForm.origem.trim(),
       autorizacao_utilizacao:leadForm.autorizacao_utilizacao,
       autorizacao_comprovada_em:authorised?new Date().toISOString():null,
+      autorizacao_referencia:authorised?leadForm.autorizacao_referencia.trim():null,
+      autorizacao_validada_por:authorised?profile?.user_id:null,
       operador_id:leadForm.operador_id||null,estado:leadForm.operador_id?"atribuida":"nova",
       criado_por:profile?.user_id,
     });
     if(insertError) setError("Não foi possível registar a lead: "+insertError.message);
-    else {setNotice("Lead registada. Só poderá ser contactada depois de confirmada a autorização de utilização.");setLeadForm({campanha_id:"",nome:"",telefone:"",email:"",origem:"Lead fornecida pelo contratante",operador_id:"",autorizacao_utilizacao:"pendente"});await load();}
+    else {setNotice("Lead registada. Só poderá ser contactada depois de confirmada a autorização de utilização.");setLeadForm({campanha_id:"",nome:"",telefone:"",email:"",origem:"Lead fornecida pelo contratante",operador_id:"",autorizacao_utilizacao:"pendente",autorizacao_referencia:""});await load();}
     setSaving(false);
   }
 
@@ -184,6 +188,7 @@ export default function OperacaoPage() {
       const sourceIdx=idx("origem","source");
       const refIdx=idx("referencia_origem","referencia","source_reference");
       const authIdx=idx("autorizacao_utilizacao","autorizacao","authorization");
+      const authRefIdx=idx("autorizacao_referencia","referencia_autorizacao","authorization_reference");
       if(nameIdx<0||sourceIdx<0||(phoneIdx<0&&emailIdx<0))throw new Error("Cabeçalhos obrigatórios: nome, telefone ou email e origem.");
       const existing=new Set<string>();
       leads.filter(l=>l.campanha_id===csvCampaignId).forEach(l=>{
@@ -202,13 +207,15 @@ export default function OperacaoPage() {
         if((phoneKey&&existing.has(phoneKey))||(emailKey&&existing.has(emailKey))){duplicates++;continue;}
         if(phoneKey)existing.add(phoneKey);if(emailKey)existing.add(emailKey);
         const auth=value(authIdx).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-        const authorised=["autorizada","autorizado","sim","yes","true","1"].includes(auth);
+        const authorised=["autorizada","autorizado","sim","yes","true","1"].includes(auth)&&Boolean(value(authRefIdx));
         const denied=["nao_autorizada","nao autorizado","nao autorizada","nao","no","false","0"].includes(auth);
         payload.push({
           campanha_id:csvCampaignId,nome,telefone:telefone||null,email:email||null,origem,
           referencia_origem:value(refIdx)||null,
           autorizacao_utilizacao:authorised?"autorizada":denied?"nao_autorizada":"pendente",
           autorizacao_comprovada_em:authorised?new Date().toISOString():null,
+          autorizacao_referencia:authorised?value(authRefIdx):null,
+          autorizacao_validada_por:authorised?profile.user_id:null,
           operador_id:csvOperatorId||null,estado:csvOperatorId?"atribuida":"nova",
           lote_importacao:crypto.randomUUID(),criado_por:profile.user_id,
         });
@@ -360,8 +367,9 @@ export default function OperacaoPage() {
             <label className="text-sm font-semibold">Origem<input required value={leadForm.origem} onChange={e=>setLeadForm(v=>({...v,origem:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2"/></label>
             <label className="text-sm font-semibold">Operador<select value={leadForm.operador_id} onChange={e=>setLeadForm(v=>({...v,operador_id:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2"><option value="">Sem atribuição</option>{operators.map(o=><option key={o.user_id} value={o.user_id}>{o.nome||o.email}</option>)}</select></label>
             <label className="text-sm font-semibold">Autorização de utilização<select value={leadForm.autorizacao_utilizacao} onChange={e=>setLeadForm(v=>({...v,autorizacao_utilizacao:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2"><option value="pendente">Pendente de confirmação</option><option value="autorizada">Autorizada e verificada</option><option value="nao_autorizada">Não autorizada</option></select></label>
+            <label className="text-sm font-semibold sm:col-span-2">Referência da prova de autorização<input required={leadForm.autorizacao_utilizacao==="autorizada"} value={leadForm.autorizacao_referencia} onChange={e=>setLeadForm(v=>({...v,autorizacao_referencia:e.target.value}))} placeholder="Ex.: contrato, e-mail de autorização, lote aprovado" className="mt-1 w-full rounded-lg border px-3 py-2"/></label>
           </div>
-          <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-900">Apenas marque “Autorizada e verificada” quando existir confirmação documental ou contratual da autorização de utilização da lead.</p>
+          <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-900">A lead só é libertada para chamadas quando a coordenação confirma a autorização e regista a referência do documento, contrato ou e-mail de aprovação do contratante.</p>
           <button disabled={saving||campaigns.length===0} className="mt-4 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Guardar lead</button>
         </form>
       </section>}
@@ -374,7 +382,7 @@ export default function OperacaoPage() {
           <label className="text-sm font-semibold">Atribuir a operador (opcional)<select value={csvOperatorId} onChange={e=>setCsvOperatorId(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2"><option value="">Sem atribuição</option>{operators.map(o=><option key={o.user_id} value={o.user_id}>{o.nome||o.email}</option>)}</select></label>
           <label className="text-sm font-semibold">Ficheiro CSV<input required type="file" name="csv_file" accept=".csv,text/csv" className="mt-1 block w-full rounded-lg border p-2 text-xs font-normal"/></label>
         </div>
-        <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">Cabeçalhos: <strong>nome, telefone, email, origem, referencia_origem, autorizacao_utilizacao</strong>. São obrigatórios nome, origem e pelo menos telefone ou email. A autorização deve ser “autorizada”, “pendente” ou “nao_autorizada”. A importação limita-se a 500 leads por ficheiro e ignora duplicados encontrados na campanha.</p>
+        <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">Cabeçalhos: <strong>nome, telefone, email, origem, referencia_origem, autorizacao_utilizacao, autorizacao_referencia</strong>. São obrigatórios nome, origem e pelo menos telefone ou email. Para marcar uma lead como autorizada, inclua também a referência de prova da autorização; sem essa referência, a lead fica pendente. A importação limita-se a 500 leads por ficheiro e ignora duplicados encontrados na campanha.</p>
         <button disabled={saving||campaigns.length===0} className="mt-4 rounded-lg bg-[#103B70] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Importar leads</button>
       </form>}
 
@@ -383,7 +391,7 @@ export default function OperacaoPage() {
         <div className="mt-5 space-y-4">
           {leads.map(lead=><article key={lead.id} className="rounded-xl border border-slate-200 p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><p className="text-xs text-slate-500">{campaignName(lead.campanha_id)} · {lead.origem}</p><h3 className="mt-1 font-bold text-slate-900">{lead.nome}</h3><p className="mt-1 text-sm text-slate-600">{lead.telefone||"Sem telefone"} {lead.email?"· "+lead.email:""}</p><p className="mt-2 text-xs text-slate-500">Estado: {label(lead.estado)} · Autorização: {label(lead.autorizacao_utilizacao)}</p></div>
+              <div><p className="text-xs text-slate-500">{campaignName(lead.campanha_id)} · {lead.origem}</p><h3 className="mt-1 font-bold text-slate-900">{lead.nome}</h3><p className="mt-1 text-sm text-slate-600">{lead.telefone||"Sem telefone"} {lead.email?"· "+lead.email:""}</p><p className="mt-2 text-xs text-slate-500">Estado: {label(lead.estado)} · Autorização: {label(lead.autorizacao_utilizacao)}</p>{canManage&&lead.autorizacao_referencia&&<p className="mt-1 text-xs text-emerald-800">Prova de autorização: {lead.autorizacao_referencia}</p>}</div>
               {canManage&&<label className="text-xs font-semibold">Atribuir a<select value={lead.operador_id||""} onChange={e=>void assignLead(lead,e.target.value)} className="mt-1 block rounded-lg border px-2 py-2 text-sm"><option value="">Sem operador</option>{operators.map(o=><option key={o.user_id} value={o.user_id}>{o.nome||o.email}</option>)}</select></label>}
               {!canManage&&<span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">{label(lead.estado)}</span>}
             </div>
