@@ -9,6 +9,8 @@ import { jsPDF } from "jspdf";
 
 type Pedido = { id:number; nome:string; empresa:string|null; area_interesse:string|null; mensagem:string; estado:string; criado_em:string };
 type Fatura = { id:number; referencia:string; valor:number; moeda:string; estado_pagamento:string; data_emissao:string; data_vencimento:string|null };
+type Campanha = { id:string; codigo:string; nome:string; setor:string; mercado:string; estado:string; data_inicio:string|null; data_fim:string|null };
+type Contrato = { id:string; campanha_id:string; referencia_externa:string|null; estado:string; submetido_em:string; validado_em:string|null; valor_comissao:number|null };
 const estadoClasses: Record<string,string> = {
   Novo:"bg-blue-50 text-blue-700", "Em análise":"bg-amber-50 text-amber-700",
   "Em andamento":"bg-violet-50 text-violet-700", Concluído:"bg-emerald-50 text-emerald-700",
@@ -23,6 +25,8 @@ export default function ClientePainelPage() {
   const [email,setEmail]=useState("");
   const [pedidos,setPedidos]=useState<Pedido[]>([]);
   const [faturas,setFaturas]=useState<Fatura[]>([]);
+  const [campanhas,setCampanhas]=useState<Campanha[]>([]);
+  const [contratos,setContratos]=useState<Contrato[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [invoiceError,setInvoiceError]=useState("");
@@ -34,14 +38,20 @@ export default function ClientePainelPage() {
     const {data:{user},error:authError}=await supabase.auth.getUser();
     if(authError||!user){router.replace("/login");return;}
     setEmail(user.email??"");
-    const [ordersResult,invoicesResult]=await Promise.all([
+    const [ordersResult,invoicesResult,campaignsResult,contractsResult]=await Promise.all([
       supabase.from("contactos").select("id,nome,empresa,area_interesse,mensagem,estado,criado_em").eq("user_id",user.id).order("criado_em",{ascending:false}),
       supabase.from("faturas").select("id,referencia,valor,moeda,estado_pagamento,data_emissao,data_vencimento").eq("user_id",user.id).order("data_emissao",{ascending:false}),
+      supabase.from("maima_campanhas").select("id,codigo,nome,setor,mercado,estado,data_inicio,data_fim").order("criado_em",{ascending:false}),
+      supabase.from("maima_contratos").select("id,campanha_id,referencia_externa,estado,submetido_em,validado_em,valor_comissao").order("submetido_em",{ascending:false}),
     ]);
     if(ordersResult.error) setError("Não foi possível carregar os seus pedidos. Tente novamente.");
     else {setPedidos((ordersResult.data??[]) as Pedido[]);setError("");}
     if(invoicesResult.error) setInvoiceError("Não foi possível carregar as suas facturas.");
     else {setFaturas((invoicesResult.data??[]) as Fatura[]);setInvoiceError("");}
+    if(campaignsResult.error) setError((v)=>v||"Não foi possível carregar as campanhas.");
+    else setCampanhas((campaignsResult.data??[]) as Campanha[]);
+    if(contractsResult.error) setError((v)=>v||"Não foi possível carregar os contratos.");
+    else setContratos((contractsResult.data??[]) as Contrato[]);
     setLoading(false);
   },[router]);
 
@@ -78,6 +88,25 @@ export default function ClientePainelPage() {
         {invoiceError&&<p role="alert" className="mt-5 rounded-lg bg-red-50 p-4 text-sm text-red-700">{invoiceError}</p>}
         {!invoiceError&&faturas.length===0&&<div className="mt-6 rounded-xl bg-slate-50 p-8 text-center"><h3 className="font-semibold">Ainda não existem facturas</h3><p className="mt-2 text-sm text-slate-600">Quando a MAIMA emitir uma factura associada à sua conta, ela aparecerá aqui.</p></div>}
         {faturas.length>0&&<div className="mt-6 space-y-3">{faturas.map(f=><article key={f.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 p-5"><div><p className="font-semibold">{f.referencia}</p><p className="mt-1 text-lg font-bold text-slate-900">{Number(f.valor).toLocaleString("pt-PT",{minimumFractionDigits:2,maximumFractionDigits:2})} {f.moeda}</p><p className="mt-1 text-xs text-slate-500">Emissão: {formatDate(f.data_emissao)} · Vencimento: {f.data_vencimento?formatDate(f.data_vencimento):"Não definido"}</p></div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-semibold ${pagamentoClasses[f.estado_pagamento]??"bg-slate-100 text-slate-700"}`}>{f.estado_pagamento}</span><button onClick={()=>downloadInvoice(f)} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white">Descarregar factura PDF</button></div></article>)}</div>}
+      </section>
+      <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+        <h2 className="text-xl font-bold">As minhas campanhas e contratos</h2>
+        <p className="mt-1 text-sm text-slate-500">Acompanhe as campanhas e os contratos que a MAIMA disponibilizar para a sua empresa.</p>
+        <div className="mt-5 space-y-3">
+          {campanhas.map(c=><article key={c.id} className="rounded-xl border border-slate-200 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs text-slate-500">{c.codigo} · {c.setor} · {c.mercado}</p><h3 className="mt-1 font-semibold">{c.nome}</h3><p className="mt-1 text-xs text-slate-500">{c.data_inicio||"Início não definido"} {c.data_fim?"— "+c.data_fim:""}</p></div><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">{c.estado}</span></div>
+          </article>)}
+          {campanhas.length===0&&<p className="rounded-lg bg-slate-50 p-5 text-sm text-slate-500">Ainda não existem campanhas associadas à sua empresa.</p>}
+        </div>
+        <h3 className="mt-7 font-bold">Contratos da empresa</h3>
+        <div className="mt-3 space-y-3">
+          {contratos.map(c=><article key={c.id} className="rounded-xl border border-slate-200 p-4">
+            <p className="font-semibold">{c.referencia_externa||"Contrato sem referência externa"}</p>
+            <p className="mt-1 text-sm text-slate-600">{campanhas.find(x=>x.id===c.campanha_id)?.nome||"Campanha"} · {new Intl.DateTimeFormat("pt-PT",{dateStyle:"medium",timeStyle:"short"}).format(new Date(c.submetido_em))}</p>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">{c.estado}</span>{c.validado_em&&<span className="text-xs text-slate-500">Validado: {new Intl.DateTimeFormat("pt-PT",{dateStyle:"medium"}).format(new Date(c.validado_em))}</span>}</div>
+          </article>)}
+          {contratos.length===0&&<p className="rounded-lg bg-slate-50 p-5 text-sm text-slate-500">Ainda não existem contratos disponibilizados para consulta.</p>}
+        </div>
       </section>
       <div className="mt-8 rounded-xl border border-emerald-200 bg-emerald-50 p-5"><h2 className="font-bold text-emerald-950">Como enviar o comprovativo?</h2><ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-emerald-900"><li>Descarregue a factura em PDF.</li><li>Faça o pagamento pelos dados indicados pela MAIMA.</li><li>Na secção abaixo, escolha a factura correspondente e seleccione o ficheiro do comprovativo.</li><li>Carregue em “Enviar comprovativo”.</li></ol></div><ComprovativosCliente />
     </section>
