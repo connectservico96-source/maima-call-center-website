@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type Profile = { user_id: string; nome: string | null; email: string; role: string; cliente_id: string | null; ativo: boolean };
 type Cliente = { id: string; nome_empresa: string; estado: string };
-type Campaign = { id: string; cliente_id: string; codigo: string; nome: string; setor: string; mercado: string; estado: string; valor_por_contrato_validado: number | null; moeda: string };
+type Campaign = { id: string; cliente_id: string; codigo: string; nome: string; setor: string; mercado: string; estado: string; data_inicio: string | null; data_fim: string | null; guiao_comercial: string | null; valor_por_contrato_validado: number | null; moeda: string };
 type Lead = { id: string; campanha_id: string; nome: string; telefone: string | null; email: string | null; origem: string; autorizacao_utilizacao: string; estado: string; operador_id: string | null; observacoes_operador: string | null; proxima_acao_em: string | null; nao_contactar: boolean };
 type Call = { id: string; lead_id: string; campanha_id: string; operador_id: string; chamada_em: string; resultado: string; duracao_segundos: number | null; notas: string | null; retorno_em: string | null; consentimento_confirmado: boolean };
 type Contract = { id: string; lead_id: string; campanha_id: string; operador_id: string; referencia_externa: string | null; estado: string; submetido_em: string; validado_em: string | null; motivo_rejeicao: string | null; motivo_cancelamento: string | null };
@@ -89,7 +89,7 @@ export default function OperacaoPage() {
     const [c, t, camp, l, ca, co, q, finance] = await Promise.all([
       db.from("maima_clientes").select("id,nome_empresa,estado").order("nome_empresa"),
       db.from("maima_perfis").select("user_id,nome,email,role,cliente_id,ativo").in("role",["operador","coordenador","admin"]).order("role"),
-      db.from("maima_campanhas").select("id,cliente_id,codigo,nome,setor,mercado,estado,valor_por_contrato_validado,moeda").order("criado_em",{ascending:false}),
+      db.from("maima_campanhas").select("id,cliente_id,codigo,nome,setor,mercado,estado,data_inicio,data_fim,guiao_comercial,valor_por_contrato_validado,moeda").order("criado_em",{ascending:false}),
       db.from("maima_leads").select("id,campanha_id,nome,telefone,email,origem,autorizacao_utilizacao,estado,operador_id,observacoes_operador,proxima_acao_em,nao_contactar").order("criado_em",{ascending:false}),
       db.from("maima_chamadas").select("id,lead_id,campanha_id,operador_id,chamada_em,resultado,duracao_segundos,notas,retorno_em,consentimento_confirmado").order("chamada_em",{ascending:false}),
       db.from("maima_contratos").select("id,lead_id,campanha_id,operador_id,referencia_externa,estado,submetido_em,validado_em,motivo_rejeicao,motivo_cancelamento").order("submetido_em",{ascending:false}),
@@ -138,6 +138,13 @@ export default function OperacaoPage() {
     if(insertError) setError("Não foi possível criar a campanha: "+insertError.message);
     else {setNotice("Campanha criada.");setCampaignForm({cliente_id:"",codigo:"",nome:"",setor:"Energia",mercado:"Portugal",data_inicio:"",data_fim:"",valor:"",guiao_comercial:""});await load();}
     setSaving(false);
+  }
+
+  async function updateCampaignState(campaign:Campaign,state:string) {
+    setError("");setNotice("");
+    const {error:updateError}=await createClient().from("maima_campanhas").update({estado:state}).eq("id",campaign.id);
+    if(updateError) setError("Não foi possível atualizar a campanha: "+updateError.message);
+    else {setNotice("Estado da campanha "+campaign.codigo+" atualizado.");await load();}
   }
 
   async function createLead(e:FormEvent<HTMLFormElement>) {
@@ -313,6 +320,20 @@ export default function OperacaoPage() {
         {[[counts.leads,"Leads visíveis"],[counts.calls,"Chamadas registadas"],[counts.submitted,"Em validação"],[counts.validated,"Validados / ativados"],[counts.chargebacks,"Chargebacks"],[counts.blocked,"Bloqueados"],[counts.fees,"Comissões calculadas"]].map(([v,t])=><div key={String(t)} className="rounded-xl border bg-white p-4"><p className="text-sm text-slate-500">{t}</p><p className="mt-1 text-2xl font-bold">{v}</p></div>)}
       </div>
 
+      {canManage&&<section className="mt-8 rounded-2xl border bg-white p-5">
+        <h2 className="text-xl font-bold">Campanhas comerciais</h2>
+        <p className="mt-1 text-sm text-slate-500">Uma campanha só pode receber chamadas quando estiver ativa. Confirme primeiro o guião, as condições e a autorização de utilização das leads.</p>
+        <div className="mt-4 space-y-3">
+          {campaigns.map(c=><article key={c.id} className="rounded-xl border border-slate-200 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div><p className="text-xs text-slate-500">{c.codigo} · {c.setor} · {c.mercado}</p><h3 className="mt-1 font-semibold">{c.nome}</h3><p className="mt-1 text-xs text-slate-500">{clientes.find(x=>x.id===c.cliente_id)?.nome_empresa||"Empresa cliente"} · {c.data_inicio||"Início não definido"}{c.data_fim?" — "+c.data_fim:""}</p><p className="mt-2 text-xs text-slate-600">{c.guiao_comercial?"Guião comercial registado":"Guião comercial ainda não registado"} · {c.valor_por_contrato_validado===null?"Remuneração por contrato não configurada":"Remuneração por contrato configurada"}</p></div>
+              <label className="text-xs font-semibold">Estado<select value={c.estado} onChange={e=>void updateCampaignState(c,e.target.value)} className="mt-1 block rounded-lg border px-3 py-2 text-sm">{["planeada","ativa","pausada","concluida","cancelada"].map(v=><option key={v} value={v}>{label(v)}</option>)}</select></label>
+            </div>
+          </article>)}
+          {campaigns.length===0&&<p className="rounded-lg bg-slate-50 p-6 text-center text-sm text-slate-500">Ainda não existem campanhas criadas.</p>}
+        </div>
+      </section>}
+
       {canManage&&<section className="mt-8 grid gap-5 lg:grid-cols-2">
         <form onSubmit={createCampaign} className="rounded-2xl border bg-white p-5">
           <h2 className="text-lg font-bold">Criar campanha</h2><p className="mt-1 text-sm text-slate-500">Associar a campanha a uma empresa cliente.</p>
@@ -367,7 +388,7 @@ export default function OperacaoPage() {
               {!canManage&&<span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">{label(lead.estado)}</span>}
             </div>
             {lead.nao_contactar&&<p className="mt-3 rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700">Esta pessoa foi marcada para não voltar a ser contactada.</p>}
-            {profile.role==="operador"&&lead.autorizacao_utilizacao==="autorizada"&&!lead.nao_contactar&&<div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {profile.role==="operador"&&lead.autorizacao_utilizacao==="autorizada"&&!lead.nao_contactar&&campaigns.some(c=>c.id===lead.campanha_id&&c.estado==="ativa")&&<div className="mt-4 grid gap-4 lg:grid-cols-2">
               <form onSubmit={e=>void addCall(e,lead)} className="rounded-lg bg-slate-50 p-4">
                 <h4 className="font-semibold">Registar chamada</h4>
                 <label className="mt-3 block text-xs font-semibold">Resultado<select name="resultado" required className="mt-1 w-full rounded-lg border bg-white px-3 py-2">{CALL_OUTCOMES.map(([v,t])=><option key={v} value={v}>{t}</option>)}</select></label>
@@ -384,6 +405,7 @@ export default function OperacaoPage() {
               </form> : <div className="rounded-lg border border-emerald-200 p-4 text-sm text-slate-600">O registo do contrato ficará disponível depois de guardar uma chamada com resultado “Interessado” e consentimento confirmado.</div>}
             </div>}
             {profile.role==="operador"&&lead.autorizacao_utilizacao!=="autorizada"&&<p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Esta lead está bloqueada para chamadas até a coordenação confirmar a autorização.</p>}
+            {profile.role==="operador"&&lead.autorizacao_utilizacao==="autorizada"&&!lead.nao_contactar&&!campaigns.some(c=>c.id===lead.campanha_id&&c.estado==="ativa")&&<p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">A campanha está planeada, pausada ou encerrada. Aguarde que a coordenação a ative antes de contactar esta lead.</p>}
             {calls.filter(c=>c.lead_id===lead.id).length>0&&<details className="mt-3"><summary className="cursor-pointer text-sm font-semibold text-slate-700">Histórico de chamadas ({calls.filter(c=>c.lead_id===lead.id).length})</summary><div className="mt-2 space-y-2">{calls.filter(c=>c.lead_id===lead.id).map(c=><div key={c.id} className="rounded-lg bg-slate-50 p-3 text-sm"><p className="font-semibold">{CALL_OUTCOMES.find(x=>x[0]===c.resultado)?.[1]||c.resultado} · {fmt(c.chamada_em)}</p><p className="mt-1 text-slate-600">{c.notas||"Sem observações"} {c.duracao_segundos!==null?"· "+c.duracao_segundos+" s":""}</p></div>)}</div></details>}
           </article>)}
           {leads.length===0&&<p className="rounded-lg bg-slate-50 p-8 text-center text-sm text-slate-500">Ainda não existem leads atribuídas ou registadas.</p>}
