@@ -12,9 +12,9 @@ const links = [
 export default function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur">
-      <div className="container flex min-h-[78px] items-center justify-between gap-6">
-        <Link href="#inicio" aria-label="MAIMA CALL CENTER — início" className="flex shrink-0 items-center">
-          <Image src="/logo.png" alt="MAIMA CALL CENTER" width={260} height={88} priority className="h-auto w-[190px] sm:w-[225px]" />
+      <div className="container flex min-h-[78px] items-center justify-between gap-3 sm:gap-6">
+        <Link href="#inicio" aria-label="MAIMA CALL CENTER — início" className="flex min-w-0 shrink items-center">
+          <Image src="/logo.png" alt="MAIMA CALL CENTER" width={260} height={88} priority className="h-auto w-[168px] sm:w-[225px]" />
         </Link>
         <nav aria-label="Navegação principal" className="hidden items-center gap-8 md:flex">
           {links.map((link) => (
@@ -26,7 +26,7 @@ export default function Header() {
         <Link href="#contacto" className="btn btn-primary hidden sm:inline-flex">
           Solicitar proposta <ArrowUpRight size={16} />
         </Link>
-        <details className="relative md:hidden">
+        <details className="relative ml-auto shrink-0 md:hidden">
           <summary aria-label="Abrir menu" className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 text-[#10243a]">
             <Menu size={21} />
           </summary>
