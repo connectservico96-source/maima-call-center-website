@@ -11,6 +11,7 @@ type Pedido = { id:number; nome:string; empresa:string|null; area_interesse:stri
 type Fatura = { id:number; referencia:string; valor:number; moeda:string; estado_pagamento:string; data_emissao:string; data_vencimento:string|null };
 type Campanha = { id:string; codigo:string; nome:string; setor:string; mercado:string; estado:string; data_inicio:string|null; data_fim:string|null };
 type Contrato = { id:string; campanha_id:string; referencia_externa:string|null; estado:string; submetido_em:string; validado_em:string|null };
+type ContaForm = { clienteId:string; nome:string; nome_empresa:string; nif:string; contacto_nome:string; telefone:string; endereco:string };
 const estadoClasses: Record<string,string> = {
   Novo:"bg-blue-50 text-blue-700", "Em análise":"bg-amber-50 text-amber-700",
   "Em andamento":"bg-violet-50 text-violet-700", Concluído:"bg-emerald-50 text-emerald-700",
@@ -27,6 +28,10 @@ export default function ClientePainelPage() {
   const [faturas,setFaturas]=useState<Fatura[]>([]);
   const [campanhas,setCampanhas]=useState<Campanha[]>([]);
   const [contratos,setContratos]=useState<Contrato[]>([]);
+  const [conta,setConta]=useState<ContaForm>({clienteId:"",nome:"",nome_empresa:"",nif:"",contacto_nome:"",telefone:"",endereco:""});
+  const [contaSaving,setContaSaving]=useState(false);
+  const [contaError,setContaError]=useState("");
+  const [contaNotice,setContaNotice]=useState("");
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [invoiceError,setInvoiceError]=useState("");
@@ -38,6 +43,21 @@ export default function ClientePainelPage() {
     const {data:{user},error:authError}=await supabase.auth.getUser();
     if(authError||!user){router.replace("/login");return;}
     setEmail(user.email??"");
+    if(showLoading){
+      const {data:profile}=await supabase.from("maima_perfis").select("nome,cliente_id").eq("user_id",user.id).maybeSingle();
+      if(profile?.cliente_id){
+        const {data:company}=await supabase.from("maima_clientes").select("id,nome_empresa,nif,contacto_nome,telefone,endereco").eq("id",profile.cliente_id).maybeSingle();
+        setConta({
+          clienteId:profile.cliente_id,
+          nome:profile.nome||"",
+          nome_empresa:company?.nome_empresa||"",
+          nif:company?.nif||"",
+          contacto_nome:company?.contacto_nome||profile.nome||"",
+          telefone:company?.telefone||"",
+          endereco:company?.endereco||"",
+        });
+      }
+    }
     const [ordersResult,invoicesResult,campaignsResult,contractsResult]=await Promise.all([
       supabase.from("contactos").select("id,nome,empresa,area_interesse,mensagem,estado,criado_em").eq("user_id",user.id).order("criado_em",{ascending:false}),
       supabase.from("faturas").select("id,referencia,valor,moeda,estado_pagamento,data_emissao,data_vencimento").eq("user_id",user.id).order("data_emissao",{ascending:false}),
@@ -57,6 +77,27 @@ export default function ClientePainelPage() {
 
   useEffect(()=>{void refreshData(true);},[refreshData]);
   useEffect(()=>{const timer=window.setInterval(()=>{void refreshData();},30000);return()=>window.clearInterval(timer);},[refreshData]);
+  async function saveAccount(event:React.FormEvent<HTMLFormElement>){
+    event.preventDefault();setContaSaving(true);setContaError("");setContaNotice("");
+    try{
+      const db=createClient();
+      const {data:{user},error:authError}=await db.auth.getUser();
+      if(authError||!user||!conta.clienteId)throw new Error("Não foi possível confirmar a sua conta empresarial. Volte a iniciar sessão ou contacte a MAIMA.");
+      const profileUpdate=await db.from("maima_perfis").update({nome:conta.nome.trim()}).eq("user_id",user.id);
+      if(profileUpdate.error)throw profileUpdate.error;
+      const companyUpdate=await db.from("maima_clientes").update({
+        nome_empresa:conta.nome_empresa.trim(),
+        nif:conta.nif.trim()||null,
+        contacto_nome:conta.contacto_nome.trim()||conta.nome.trim(),
+        telefone:conta.telefone.trim()||null,
+        endereco:conta.endereco.trim()||null,
+      }).eq("id",conta.clienteId);
+      if(companyUpdate.error)throw companyUpdate.error;
+      setContaNotice("Dados da conta atualizados com sucesso.");
+    }catch(err){setContaError(err instanceof Error?err.message:"Não foi possível guardar os dados da conta.");}
+    finally{setContaSaving(false);}
+  }
+
   async function handleSignOut(){setSigningOut(true);await createClient().auth.signOut();router.replace("/login");router.refresh();}
   const formatDate=(v:string)=>new Intl.DateTimeFormat("pt-PT",{dateStyle:"medium"}).format(new Date(v+"T00:00:00"));
   function downloadInvoice(f:Fatura){
@@ -78,6 +119,32 @@ export default function ClientePainelPage() {
     <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5"><div><p className="text-xs font-semibold uppercase tracking-[.18em] text-emerald-700">MAIMA CALL CENTER</p><p className="mt-1 text-lg font-bold text-slate-900">Área do cliente</p></div><button onClick={handleSignOut} disabled={signingOut} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60">{signingOut?"A sair...":"Terminar sessão"}</button></div></header>
     <section className="mx-auto max-w-6xl px-5 py-10">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="text-sm font-medium text-emerald-700">Bem-vindo</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">O seu espaço</h1><p className="mt-2 text-slate-600">{email}</p></div><button onClick={()=>void refreshData()} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Actualizar informação</button></div>
+      <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+        <div><h2 className="text-xl font-bold">Dados da conta e da empresa</h2><p className="mt-1 text-sm text-slate-500">Mantenha atualizados os dados de contacto da sua empresa. O e-mail de acesso é gerido separadamente.</p></div>
+        <form onSubmit={saveAccount} className="mt-5 grid gap-4 sm:grid-cols-2">
+          <label className="text-sm font-semibold text-slate-700">O seu nome
+            <input required maxLength={150} value={conta.nome} onChange={e=>setConta(v=>({...v,nome:e.target.value}))} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal"/>
+          </label>
+          <label className="text-sm font-semibold text-slate-700">Nome da empresa
+            <input required maxLength={200} value={conta.nome_empresa} onChange={e=>setConta(v=>({...v,nome_empresa:e.target.value}))} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal"/>
+          </label>
+          <label className="text-sm font-semibold text-slate-700">NIF (opcional)
+            <input maxLength={60} value={conta.nif} onChange={e=>setConta(v=>({...v,nif:e.target.value}))} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal"/>
+          </label>
+          <label className="text-sm font-semibold text-slate-700">Pessoa de contacto
+            <input maxLength={150} value={conta.contacto_nome} onChange={e=>setConta(v=>({...v,contacto_nome:e.target.value}))} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal"/>
+          </label>
+          <label className="text-sm font-semibold text-slate-700">Telefone
+            <input maxLength={40} value={conta.telefone} onChange={e=>setConta(v=>({...v,telefone:e.target.value}))} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal"/>
+          </label>
+          <label className="text-sm font-semibold text-slate-700">Morada
+            <input maxLength={250} value={conta.endereco} onChange={e=>setConta(v=>({...v,endereco:e.target.value}))} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal"/>
+          </label>
+          {contaError&&<p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700 sm:col-span-2">{contaError}</p>}
+          {contaNotice&&<p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800 sm:col-span-2">{contaNotice}</p>}
+          <div className="sm:col-span-2"><button disabled={contaSaving||!conta.clienteId} className="rounded-lg bg-[#103B70] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{contaSaving?"A guardar...":"Guardar dados da conta"}</button></div>
+        </form>
+      </section>
       <div className="mt-8 grid gap-4 sm:grid-cols-3"><div className="rounded-xl border border-slate-200 bg-white p-5"><p className="text-sm text-slate-500">Total de pedidos</p><p className="mt-2 text-3xl font-bold">{pedidos.length}</p></div><div className="rounded-xl border border-slate-200 bg-white p-5"><p className="text-sm text-slate-500">Em tratamento</p><p className="mt-2 text-3xl font-bold">{pedidos.filter(p=>!["Concluído","Cancelado"].includes(p.estado)).length}</p></div><div className="rounded-xl border border-slate-200 bg-white p-5"><p className="text-sm text-slate-500">Concluídos</p><p className="mt-2 text-3xl font-bold">{pedidos.filter(p=>p.estado==="Concluído").length}</p></div></div>
       <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8"><div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center"><div><h2 className="text-xl font-bold">Os meus pedidos</h2><p className="mt-1 text-sm text-slate-500">Consulte aqui o estado dos pedidos associados à sua conta.</p></div><Link href="/#contacto" className="text-sm font-semibold text-emerald-700">Fazer novo pedido</Link></div>
         {error&&<div role="alert" className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</div>}
