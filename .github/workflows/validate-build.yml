@@ -1,0 +1,31 @@
+name: Validar compilação MAIMA
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - feature/crm-operacional-maima
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Instalar dependências e compilar
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Obter código
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Configurar Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+
+      - name: Instalar dependências
+        run: npm install --no-audit --no-fund
+
+      - name: Validar compilação Next.js
+        run: npm run build
