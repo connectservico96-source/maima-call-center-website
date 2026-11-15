@@ -23,6 +23,7 @@ export default function ContactForm() {
       email: String(data.get("email") ?? ""),
       interest: String(data.get("interest") ?? ""),
       message: String(data.get("message") ?? ""),
+      privacyAccepted: data.get("privacy") === "on",
     };
 
     try {
@@ -166,9 +167,7 @@ export default function ContactForm() {
               className="mt-1 accent-[#103B70]"
             />
             <span>
-              Confirmo que li a informação de privacidade e autorizo o
-              contacto para resposta a este pedido. O texto legal definitivo
-              deve ser validado antes da publicação.
+              Confirmo que li a <a href="/privacidade" className="font-semibold underline">informação de privacidade</a> e autorizo o tratamento dos dados para resposta a este pedido.
             </span>
           </label>
 

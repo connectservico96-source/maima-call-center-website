@@ -1,6 +1,36 @@
-# MAIMA CALL CENTER — Website
+# MAIMA CALL CENTER — Website e plataforma operacional
 
-Website institucional responsivo em Next.js App Router, React, TypeScript e Tailwind CSS.
+Website institucional e plataforma de gestão comercial da MAIMA CALL CENTER, desenvolvido com Next.js App Router, React, TypeScript, Tailwind CSS e Supabase.
+
+## Funcionalidades
+
+### Website público
+- Apresentação institucional dos serviços de angariação comercial, qualificação de contactos, validação e acompanhamento operacional.
+- Formulário de contacto ligado à API e à tabela `public.contactos`, com registo da aceitação da informação de privacidade.
+- Notificação por e-mail à administração quando é recebido um pedido.
+- Páginas de privacidade, cookies e termos de utilização em versão de trabalho, sujeitas a validação jurídica.
+
+### Área de autenticação e cliente
+- Registo de conta de cliente, início de sessão e recuperação de palavra-passe.
+- Perfis com funções `admin`, `coordenador`, `operador` e `cliente`.
+- Consulta dos pedidos e faturas associados à conta.
+- Consulta de campanhas e contratos disponibilizados à empresa através de funções de portal com campos limitados.
+- Atualização dos dados de perfil e de contacto da empresa.
+- Envio e histórico de comprovativos de pagamento em armazenamento privado.
+
+### Gestão interna
+- Painel administrativo para pedidos, notas internas, faturação e revisão de comprovativos.
+- Gestão de utilizadores e atribuição de perfis.
+- CRM operacional com campanhas, guiões, importação CSV de leads, distribuição por operador, registo de chamadas, retornos, contratos, validação, chargebacks, controlo de qualidade e indicadores.
+- Exportação CSV de leads e chamadas.
+
+## Perfis de acesso
+- **Administrador:** gestão global, equipa, empresas, campanhas, leads, contratos, qualidade e condições financeiras internas.
+- **Coordenador:** gestão da operação, distribuição de leads, campanhas, validação de contratos e qualidade.
+- **Operador:** consulta apenas das leads atribuídas, registo de chamadas e submissão de contratos elegíveis.
+- **Cliente empresarial:** consulta dos dados da sua empresa, campanhas e contratos disponibilizados, pedidos e faturação.
+
+As permissões são aplicadas na base de dados através de Row Level Security (RLS). A interface não é considerada uma barreira de segurança por si só.
 
 ## Requisitos
 - Node.js 20.9 ou superior
@@ -19,22 +49,36 @@ npm run build
 npm run start
 ```
 
-## Antes de publicar
-1. Confirmar a qualidade visual do logótipo extraído do PDF; o ficheiro `public/logo.png` foi preparado com fundo transparente. Confirmar os códigos exatos das cores oficiais.
-2. Confirmar o texto institucional, os serviços efetivamente disponíveis e os dados legais da entidade.
-3. Adicionar email, telefone, domínio e demais contactos oficiais.
-4. Ligar o formulário a um endpoint seguro ou CRM. Atualmente o formulário é demonstrativo e **não envia nem armazena dados**.
-5. Rever as páginas de privacidade, cookies e termos com apoio jurídico competente, incluindo o enquadramento Angola–Portugal e a proteção de dados.
-6. Definir `NEXT_PUBLIC_SITE_URL` para o domínio real.
-7. Rever SEO e, após a validação do domínio/conteúdo, permitir indexação. O projeto começa com `robots: noindex` para evitar indexação acidental.
-8. Executar testes em dispositivos móveis, acessibilidade, formulário, segurança e desempenho.
+## Configuração e publicação
+1. Definir `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+2. Configurar `NEXT_PUBLIC_SITE_URL` para o domínio real.
+3. Configurar os segredos SMTP apenas no ambiente de servidor da Vercel; nunca os colocar em código de cliente.
+4. Confirmar as URLs de redirecionamento de autenticação no Supabase.
+5. Criar contas individuais para a equipa. O utilizador regista a conta e a administração atribui o perfil interno adequado em **Equipa e acessos**.
+6. Configurar empresas e campanhas com guião aprovado e condições financeiras confirmadas.
+7. Só importar leads fornecidas ou autorizadas pelo contratante. As leads sem prova de autorização ficam bloqueadas para chamadas.
+8. O sistema telefónico externo ainda não está integrado: nesta versão as chamadas são registadas manualmente. A integração depende do fornecedor e do CRM/sistema de chamadas aprovado pelo contratante.
+9. Rever as páginas de privacidade, cookies e termos com apoio jurídico, incluindo as transferências internacionais de dados entre Angola e Portugal.
+10. A faturação PDF atualmente disponibilizada no portal é um documento de consulta gerado pela aplicação. A sua validade como fatura fiscal deve ser confirmada por profissional de contabilidade e substituída por integração fiscal adequada antes de ser usada como documento fiscal oficial.
+11. O website mantém `robots: noindex` até a MAIMA decidir que está pronto para indexação.
 
-## Estrutura
+## Estrutura principal
 - `app/page.tsx`: homepage
-- `app/globals.css`: estilos globais e tokens visuais provisórios
-- `components/Header.tsx`: navegação responsiva
-- `components/ContactForm.tsx`: formulário demonstrativo
-- `app/privacidade`, `app/cookies`, `app/termos`: páginas-base a validar
+- `app/admin/page.tsx`: administração de pedidos e faturação
+- `app/admin/equipa/page.tsx`: perfis e acessos
+- `app/admin/operacao/page.tsx`: CRM operacional
+- `app/cliente/painel/page.tsx`: Área de Cliente empresarial
+- `app/registar/page.tsx`: registo de clientes
+- `app/login/page.tsx`: autenticação e encaminhamento por perfil
+- `app/api/contactos/route.ts`: receção dos pedidos do website
+- `lib/supabase`: clientes Supabase de navegador e servidor
+
+## Limites conhecidos da primeira versão operacional
+- O registo de chamadas é manual; não existe ainda integração com telefonia, gravações ou sincronização automática com CRM externo.
+- Os indicadores atuais são contagens operacionais de base; faltam relatórios históricos completos, taxas de conversão por período, custo por contrato válido e relatórios automáticos.
+- A criação de contas de operadores/coordenadores começa pelo registo individual e atribuição posterior do perfil pela administração.
+- As páginas legais são textos de trabalho, não aconselhamento jurídico nem confirmação de conformidade.
+- A faturação PDF do portal não substitui, por si só, um sistema de faturação certificado.
 
 ## Factos vs. hipóteses
-O texto empresarial usa o documento de projeto disponibilizado como base. A paleta azul/verde com apontamento vermelho foi aproximada visualmente a partir do logótipo do PDF; confirmar os códigos oficiais da marca. Não são apresentados testemunhos, clientes, certificações ou resultados que não tenham sido confirmados.
+O conteúdo institucional tem como base o projeto operacional disponibilizado pela MAIMA. Não são apresentados resultados de vendas, clientes, certificações ou parcerias não confirmados. A remuneração por contrato é informação interna da campanha e não deve ser apresentada como preço público da MAIMA.

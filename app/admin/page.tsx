@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import ComprovativosAdmin from "./comprovativos";
 
@@ -147,7 +148,7 @@ export default function AdminPage() {
   return <main className="min-h-screen bg-slate-50">
     <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-5">
       <div><p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-700">MAIMA CALL CENTER</p><h1 className="mt-1 text-xl font-bold text-slate-900">Painel administrativo</h1></div>
-      <div className="flex items-center gap-3"><span className="hidden text-sm text-slate-500 sm:inline">{email}</span><button onClick={logout} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Terminar sessão</button></div>
+      <div className="flex flex-wrap items-center gap-2"><span className="hidden text-sm text-slate-500 sm:inline">{email}</span><Link href="/admin/operacao" className="rounded-lg border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-800">CRM operacional</Link><Link href="/admin/equipa" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700">Equipa e acessos</Link><button onClick={logout} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Terminar sessão</button></div>
     </div></header>
     <section className="mx-auto max-w-7xl px-5 py-8">
       <div className="flex flex-wrap items-end justify-between gap-4"><div><h2 className="text-2xl font-bold text-slate-900">Visão geral</h2><p className="mt-1 text-sm text-slate-600">Acompanhe os pedidos e a actividade comercial num só lugar.</p></div>

@@ -23,6 +23,7 @@ export default function Header() {
             </Link>
           ))}
         </nav>
+        <Link href="/login" className="hidden rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-[#103B70] transition hover:bg-slate-50 sm:inline-flex">Área de cliente</Link>
         <Link href="#contacto" className="btn btn-primary hidden sm:inline-flex">
           Solicitar proposta <ArrowUpRight size={16} />
         </Link>
@@ -36,6 +37,7 @@ export default function Header() {
                 {link.label}
               </Link>
             ))}
+            <Link href="/login" className="rounded-lg px-3 py-3 text-sm font-semibold text-[#103B70] hover:bg-slate-50">Área de cliente</Link>
             <Link href="#contacto" className="btn btn-primary mt-1">Solicitar proposta</Link>
           </nav>
         </details>
