@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import ComprovativosAdmin from "./comprovativos";
 
 const ADMIN_EMAIL = "connectservico96@gmail.com";
 const ESTADOS = ["Novo", "Em análise", "Em andamento", "Concluído", "Cancelado"];
@@ -176,6 +177,7 @@ export default function AdminPage() {
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-bold">Facturas emitidas ({faturas.length})</h3><select value={invoiceFilter} onChange={e=>setInvoiceFilter(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"><option>Todas</option>{PAGAMENTOS.map(s=><option key={s}>{s}</option>)}</select></div>
         <div className="mt-3 space-y-3">{filteredInvoices.map(f=><article key={f.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4"><div><p className="font-semibold">{f.referencia}</p><p className="mt-1 text-sm text-slate-600">{clientes.find(c=>c.user_id===f.user_id)?.nome || "Cliente"} · {Number(f.valor).toLocaleString("pt-PT",{minimumFractionDigits:2,maximumFractionDigits:2})} {f.moeda}</p><p className="mt-1 text-xs text-slate-500">Emitida: {f.data_emissao} · Vencimento: {f.data_vencimento || "Não definido"}</p></div><select aria-label={"Estado da factura "+f.referencia} value={f.estado_pagamento} onChange={e=>void updateInvoiceStatus(f.id,e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">{PAGAMENTOS.map(s=><option key={s}>{s}</option>)}</select></article>)}{filteredInvoices.length===0&&<p className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">Ainda não existem facturas neste filtro.</p>}</div>
       </section>
+      <ComprovativosAdmin />
       <p className="mt-8 text-center text-xs text-slate-400">A lista verifica automaticamente novos pedidos a cada 30 segundos enquanto esta página estiver aberta.</p>
     </section>
   </main>;

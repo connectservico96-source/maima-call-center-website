@@ -18,7 +18,8 @@
     "lucide-react": "^0.468.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.57.0",
-    "nodemailer": "^7.0.3"
+    "nodemailer": "^7.0.3",
+    "jspdf": "^3.0.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
