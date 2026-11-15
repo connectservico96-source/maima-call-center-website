@@ -9,7 +9,7 @@ type Profile = { user_id: string; nome: string | null; email: string; role: stri
 type Cliente = { id: string; nome_empresa: string; estado: string };
 type Campaign = { id: string; cliente_id: string; codigo: string; nome: string; setor: string; mercado: string; estado: string; valor_por_contrato_validado: number | null; moeda: string };
 type Lead = { id: string; campanha_id: string; nome: string; telefone: string | null; email: string | null; origem: string; autorizacao_utilizacao: string; estado: string; operador_id: string | null; observacoes_operador: string | null; proxima_acao_em: string | null; nao_contactar: boolean };
-type Call = { id: string; lead_id: string; campanha_id: string; operador_id: string; chamada_em: string; resultado: string; duracao_segundos: number | null; notas: string | null; retorno_em: string | null };
+type Call = { id: string; lead_id: string; campanha_id: string; operador_id: string; chamada_em: string; resultado: string; duracao_segundos: number | null; notas: string | null; retorno_em: string | null; consentimento_confirmado: boolean };
 type Contract = { id: string; lead_id: string; campanha_id: string; operador_id: string; referencia_externa: string | null; estado: string; submetido_em: string; validado_em: string | null; motivo_rejeicao: string | null; motivo_cancelamento: string | null; valor_comissao: number | null };
 type Quality = { id: string; operador_id: string; pontuacao: number; falhas_identificadas: string | null; acao_corretiva: string | null; avaliado_em: string };
 
@@ -46,7 +46,7 @@ export default function OperacaoPage() {
   const [leadForm,setLeadForm] = useState({campanha_id:"",nome:"",telefone:"",email:"",origem:"Lead fornecida pelo contratante",operador_id:"",autorizacao_utilizacao:"pendente"});
   const [contractRef,setContractRef] = useState<Record<string,string>>({});
   const [contractReason,setContractReason] = useState<Record<string,string>>({});
-  const [qualityForm,setQualityForm] = useState({chamada_id:"",pontuacao:"90",falhas_identificadas:"",acao_corretiva:""});
+  const [qualityForm,setQualityForm] = useState({chamada_id:"",pontuacao:"90",falhas_identificadas:"",acao_corretiva:"",identificacao:false,finalidade:false,proposta:false,consentimento:false,sem_pressao:false,dados_confirmados:false});
   const [saving,setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -65,7 +65,7 @@ export default function OperacaoPage() {
       db.from("maima_perfis").select("user_id,nome,email,role,cliente_id,ativo").in("role",["operador","coordenador","admin"]).order("role"),
       db.from("maima_campanhas").select("id,cliente_id,codigo,nome,setor,mercado,estado,valor_por_contrato_validado,moeda").order("criado_em",{ascending:false}),
       db.from("maima_leads").select("id,campanha_id,nome,telefone,email,origem,autorizacao_utilizacao,estado,operador_id,observacoes_operador,proxima_acao_em,nao_contactar").order("criado_em",{ascending:false}),
-      db.from("maima_chamadas").select("id,lead_id,campanha_id,operador_id,chamada_em,resultado,duracao_segundos,notas,retorno_em").order("chamada_em",{ascending:false}),
+      db.from("maima_chamadas").select("id,lead_id,campanha_id,operador_id,chamada_em,resultado,duracao_segundos,notas,retorno_em,consentimento_confirmado").order("chamada_em",{ascending:false}),
       db.from("maima_contratos").select("id,lead_id,campanha_id,operador_id,referencia_externa,estado,submetido_em,validado_em,motivo_rejeicao,motivo_cancelamento,valor_comissao").order("submetido_em",{ascending:false}),
       db.from("maima_qualidade").select("id,operador_id,pontuacao,falhas_identificadas,acao_corretiva,avaliado_em").order("avaliado_em",{ascending:false}),
     ]);
@@ -145,6 +145,8 @@ export default function OperacaoPage() {
       duracao_segundos:fd.get("duracao")?Number(fd.get("duracao")):null,
       notas:String(fd.get("notas")||"").trim()||null,
       retorno_em:fd.get("retorno_em")?new Date(String(fd.get("retorno_em"))).toISOString():null,
+      consentimento_confirmado:fd.get("consentimento_confirmado")==="on",
+      consentimento_em:fd.get("consentimento_confirmado")==="on"?new Date().toISOString():null,
     });
     if(insertError) setError("Não foi possível registar a chamada: "+insertError.message);
     else {setNotice("Chamada registada.");e.currentTarget.reset();await load();}
@@ -153,6 +155,8 @@ export default function OperacaoPage() {
 
   async function submitContract(e:FormEvent<HTMLFormElement>,lead:Lead) {
     e.preventDefault();if(!profile)return;
+    const hasConsent = calls.some(c=>c.lead_id===lead.id && c.resultado==="interessado" && c.consentimento_confirmado);
+    if(!hasConsent){setError("Antes de submeter o contrato, registe uma chamada com resultado “Interessado” e confirmação do consentimento.");return;}
     setSaving(true);setError("");setNotice("");
     const {error:insertError}=await createClient().from("maima_contratos").insert({
       lead_id:lead.id,campanha_id:lead.campanha_id,operador_id:profile.user_id,
@@ -181,12 +185,19 @@ export default function OperacaoPage() {
     if(!Number.isInteger(score)||score<0||score>100){setError("A pontuação tem de estar entre 0 e 100.");return;}
     const {error:insertError}=await createClient().from("maima_qualidade").insert({
       chamada_id:selected.id,lead_id:lead.id,campanha_id:selected.campanha_id,operador_id:selected.operador_id,
-      avaliador_id:profile.user_id,pontuacao:score,checklist:{},
+      avaliador_id:profile.user_id,pontuacao:score,checklist:{
+        identificacao:qualityForm.identificacao,
+        finalidade_contacto:qualityForm.finalidade,
+        proposta_clara:qualityForm.proposta,
+        consentimento:qualityForm.consentimento,
+        comunicacao_sem_pressao:qualityForm.sem_pressao,
+        dados_confirmados:qualityForm.dados_confirmados,
+      },
       falhas_identificadas:qualityForm.falhas_identificadas.trim()||null,
       acao_corretiva:qualityForm.acao_corretiva.trim()||null,
     });
     if(insertError) setError("Não foi possível guardar a avaliação: "+insertError.message);
-    else {setNotice("Avaliação de qualidade registada.");setQualityForm({chamada_id:"",pontuacao:"90",falhas_identificadas:"",acao_corretiva:""});await load();}
+    else {setNotice("Avaliação de qualidade registada.");setQualityForm({chamada_id:"",pontuacao:"90",falhas_identificadas:"",acao_corretiva:"",identificacao:false,finalidade:false,proposta:false,consentimento:false,sem_pressao:false,dados_confirmados:false});await load();}
   }
 
   const fmt=(value:string)=>new Intl.DateTimeFormat("pt-PT",{dateStyle:"short",timeStyle:"short"}).format(new Date(value));
@@ -253,6 +264,7 @@ export default function OperacaoPage() {
                 <h4 className="font-semibold">Registar chamada</h4>
                 <label className="mt-3 block text-xs font-semibold">Resultado<select name="resultado" required className="mt-1 w-full rounded-lg border bg-white px-3 py-2">{CALL_OUTCOMES.map(([v,t])=><option key={v} value={v}>{t}</option>)}</select></label>
                 <label className="mt-3 block text-xs font-semibold">Duração (segundos)<input name="duracao" type="number" min="0" className="mt-1 w-full rounded-lg border bg-white px-3 py-2"/></label>
+                <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-slate-700"><input name="consentimento_confirmado" type="checkbox" className="mt-1"/><span>O potencial cliente confirmou o consentimento necessário para avançar com a proposta/contrato, segundo o procedimento aprovado.</span></label>
                 <label className="mt-3 block text-xs font-semibold">Retorno (opcional)<input name="retorno_em" type="datetime-local" className="mt-1 w-full rounded-lg border bg-white px-3 py-2"/></label>
                 <label className="mt-3 block text-xs font-semibold">Notas<textarea name="notas" rows={2} className="mt-1 w-full rounded-lg border bg-white px-3 py-2"/></label>
                 <button disabled={saving} className="mt-3 rounded-lg bg-[#103B70] px-4 py-2 text-sm font-semibold text-white">Guardar chamada</button>
@@ -282,6 +294,9 @@ export default function OperacaoPage() {
           <h2 className="text-lg font-bold">Avaliação de qualidade</h2><p className="mt-1 text-sm text-slate-500">Registe uma revisão de chamada e uma eventual ação corretiva.</p>
           <label className="mt-4 block text-sm font-semibold">Chamada<select required value={qualityForm.chamada_id} onChange={e=>setQualityForm(v=>({...v,chamada_id:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2"><option value="">Selecionar chamada</option>{calls.map(c=><option key={c.id} value={c.id}>{leadName(c.lead_id)} · {fmt(c.chamada_em)} · {operatorName(c.operador_id)}</option>)}</select></label>
           <label className="mt-3 block text-sm font-semibold">Pontuação (0–100)<input required type="number" min="0" max="100" value={qualityForm.pontuacao} onChange={e=>setQualityForm(v=>({...v,pontuacao:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2"/></label>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">{[
+            ["identificacao","Identificação clara do operador"],["finalidade","Finalidade do contacto explicada"],["proposta","Proposta e condições apresentadas claramente"],["consentimento","Consentimento confirmado"],["sem_pressao","Sem pressão ou promessas indevidas"],["dados_confirmados","Dados essenciais confirmados"],
+          ].map(([key,text])=><label key={key} className="flex items-start gap-2 text-xs leading-5 text-slate-700"><input type="checkbox" checked={Boolean(qualityForm[key as keyof typeof qualityForm])} onChange={e=>setQualityForm(v=>({...v,[key]:e.target.checked}))} className="mt-1"/>{text}</label>)}</div>
           <label className="mt-3 block text-sm font-semibold">Falhas identificadas<textarea value={qualityForm.falhas_identificadas} onChange={e=>setQualityForm(v=>({...v,falhas_identificadas:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2" rows={2}/></label>
           <label className="mt-3 block text-sm font-semibold">Ação corretiva<textarea value={qualityForm.acao_corretiva} onChange={e=>setQualityForm(v=>({...v,acao_corretiva:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2" rows={2}/></label>
           <button disabled={!calls.length} className="mt-4 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Guardar avaliação</button>
