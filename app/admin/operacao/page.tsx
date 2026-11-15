@@ -8,8 +8,8 @@ import { createClient } from "@/lib/supabase/client";
 type Profile = { user_id: string; nome: string | null; email: string; role: string; cliente_id: string | null; ativo: boolean };
 type Cliente = { id: string; nome_empresa: string; estado: string };
 type Campaign = { id: string; cliente_id: string; codigo: string; nome: string; setor: string; mercado: string; estado: string; data_inicio: string | null; data_fim: string | null; guiao_comercial: string | null; valor_por_contrato_validado: number | null; moeda: string };
-type Lead = { id: string; campanha_id: string; nome: string; telefone: string | null; email: string | null; origem: string; autorizacao_utilizacao: string; autorizacao_referencia: string | null; autorizacao_validada_por: string | null; estado: string; operador_id: string | null; observacoes_operador: string | null; proxima_acao_em: string | null; nao_contactar: boolean };
-type Call = { id: string; lead_id: string; campanha_id: string; operador_id: string; chamada_em: string; resultado: string; duracao_segundos: number | null; notas: string | null; retorno_em: string | null; consentimento_confirmado: boolean };
+type Lead = { id: string; campanha_id: string; nome: string; telefone: string | null; email: string | null; origem: string; autorizacao_utilizacao: string; autorizacao_referencia: string | null; autorizacao_validada_por: string | null; estado: string; operador_id: string | null; observacoes_operador: string | null; proxima_acao_em: string | null; nao_contactar: boolean; criado_em:string };
+type Call = { id: string; lead_id: string; campanha_id: string; operador_id: string; chamada_em: string; tentativa_numero:number; resultado: string; duracao_segundos: number | null; notas: string | null; retorno_em: string | null; consentimento_confirmado: boolean; consentimento_em:string|null };
 type Contract = { id: string; lead_id: string; campanha_id: string; operador_id: string; referencia_externa: string | null; estado: string; submetido_em: string; validado_em: string | null; motivo_rejeicao: string | null; motivo_cancelamento: string | null };
 type Quality = { id: string; operador_id: string; pontuacao: number; falhas_identificadas: string | null; acao_corretiva: string | null; avaliado_em: string };
 type Comissao = { id:string; contrato_id:string; campanha_id:string; operador_id:string; valor:number|null; moeda:string; estado:string };
@@ -90,8 +90,8 @@ export default function OperacaoPage() {
       db.from("maima_clientes").select("id,nome_empresa,estado").order("nome_empresa"),
       db.from("maima_perfis").select("user_id,nome,email,role,cliente_id,ativo").in("role",["operador","coordenador","admin"]).order("role"),
       db.from("maima_campanhas").select("id,cliente_id,codigo,nome,setor,mercado,estado,data_inicio,data_fim,guiao_comercial,valor_por_contrato_validado,moeda").order("criado_em",{ascending:false}),
-      db.from("maima_leads").select("id,campanha_id,nome,telefone,email,origem,autorizacao_utilizacao,autorizacao_referencia,autorizacao_validada_por,estado,operador_id,observacoes_operador,proxima_acao_em,nao_contactar").order("criado_em",{ascending:false}),
-      db.from("maima_chamadas").select("id,lead_id,campanha_id,operador_id,chamada_em,resultado,duracao_segundos,notas,retorno_em,consentimento_confirmado").order("chamada_em",{ascending:false}),
+      db.from("maima_leads").select("id,campanha_id,nome,telefone,email,origem,autorizacao_utilizacao,autorizacao_referencia,autorizacao_validada_por,estado,operador_id,observacoes_operador,proxima_acao_em,nao_contactar,criado_em").order("criado_em",{ascending:false}),
+      db.from("maima_chamadas").select("id,lead_id,campanha_id,operador_id,chamada_em,tentativa_numero,resultado,duracao_segundos,notas,retorno_em,consentimento_confirmado,consentimento_em").order("chamada_em",{ascending:false}),
       db.from("maima_contratos").select("id,lead_id,campanha_id,operador_id,referencia_externa,estado,submetido_em,validado_em,motivo_rejeicao,motivo_cancelamento").order("submetido_em",{ascending:false}),
       db.from("maima_qualidade").select("id,operador_id,pontuacao,falhas_identificadas,acao_corretiva,avaliado_em").order("avaliado_em",{ascending:false}),
       db.from("maima_comissoes_contratos").select("id,contrato_id,campanha_id,operador_id,valor,moeda,estado").order("atualizado_em",{ascending:false}),
@@ -311,6 +311,32 @@ export default function OperacaoPage() {
   const operatorName=(id:string)=>team.find(p=>p.user_id===id)?.nome||team.find(p=>p.user_id===id)?.email||"Operador";
   const campaignName=(id:string)=>campaigns.find(c=>c.id===id)?.nome||"Campanha";
   const leadName=(id:string)=>leads.find(l=>l.id===id)?.nome||"Lead";
+  function csvDownload(filename:string,headers:string[],rows:(string|number|null|boolean)[][]){
+    const escape=(value:string|number|null|boolean)=>'"'+String(value??"").replace(/"/g,'""')+'"';
+    const content="\\uFEFF"+[headers,...rows].map(row=>row.map(escape).join(";")).join("\\r\\n");
+    const blob=new Blob([content],{type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement("a");
+    link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+  }
+  function exportLeads(){
+    const rows=leads.map(l=>[
+      l.id,campaignName(l.campanha_id),l.nome,l.telefone,l.email,l.origem,
+      l.autorizacao_utilizacao,l.autorizacao_referencia,l.estado,operatorName(l.operador_id||""),
+      l.nao_contactar,new Date(l.criado_em).toISOString(),
+    ]);
+    csvDownload("maima-leads.csv",["ID","Campanha","Nome","Telefone","Email","Origem","Autorizacao","Referencia da autorizacao","Estado","Operador","Nao contactar","Criada em"],rows);
+  }
+  function exportCalls(){
+    const rows=calls.map(c=>[
+      c.id,campaignName(c.campanha_id),leadName(c.lead_id),operatorName(c.operador_id),
+      new Date(c.chamada_em).toISOString(),c.tentativa_numero,c.resultado,c.duracao_segundos,
+      c.retorno_em?new Date(c.retorno_em).toISOString():"",c.consentimento_confirmado,
+      c.consentimento_em?new Date(c.consentimento_em).toISOString():"",c.notas,
+    ]);
+    csvDownload("maima-chamadas.csv",["ID","Campanha","Lead","Operador","Data","Tentativa","Resultado","Duracao segundos","Retorno","Consentimento confirmado","Consentimento em","Notas"],rows);
+  }
+
 
   if(loading) return <main className="flex min-h-screen items-center justify-center bg-slate-50"><p>A carregar o CRM operacional...</p></main>;
   if(!profile) return <main className="mx-auto max-w-xl p-8"><p role="alert">{error||"Perfil indisponível."}</p></main>;
@@ -387,7 +413,7 @@ export default function OperacaoPage() {
       </form>}
 
       <section className="mt-9 rounded-2xl border bg-white p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-bold">Leads da operação</h2><p className="mt-1 text-sm text-slate-500">{canManage?"Distribua leads e acompanhe o trabalho da equipa.":"Consulte as leads que lhe foram atribuídas e registe cada tentativa de contacto."}</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold">{leads.length} registos</span></div>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-bold">Leads da operação</h2><p className="mt-1 text-sm text-slate-500">{canManage?"Distribua leads e acompanhe o trabalho da equipa.":"Consulte as leads que lhe foram atribuídas e registe cada tentativa de contacto."}</p></div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold">{leads.length} registos</span>{canManage&&<><button type="button" disabled={!leads.length} onClick={exportLeads} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Exportar leads CSV</button><button type="button" disabled={!calls.length} onClick={exportCalls} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Exportar chamadas CSV</button></>}</div></div>
         <div className="mt-5 space-y-4">
           {leads.map(lead=><article key={lead.id} className="rounded-xl border border-slate-200 p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
