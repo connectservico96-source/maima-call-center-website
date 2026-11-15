@@ -44,8 +44,13 @@ export default function ClientePainelPage() {
     if(authError||!user){router.replace("/login");return;}
     setEmail(user.email??"");
     if(showLoading){
-      const {data:profile}=await supabase.from("maima_perfis").select("nome,cliente_id").eq("user_id",user.id).maybeSingle();
-      if(profile?.cliente_id){
+      const {data:profile,error:profileError}=await supabase.from("maima_perfis").select("nome,cliente_id,role,ativo").eq("user_id",user.id).maybeSingle();
+      if(profileError||!profile){setError("Não foi possível confirmar o perfil da conta. Entre novamente ou contacte a MAIMA.");setLoading(false);return;}
+      if(!profile.ativo){await supabase.auth.signOut();router.replace("/login");return;}
+      if(profile.role==="admin"){router.replace("/admin");return;}
+      if(profile.role==="coordenador"||profile.role==="operador"){router.replace("/admin/operacao");return;}
+      if(profile.role!=="cliente"){router.replace("/login");return;}
+      if(profile.cliente_id){
         const {data:company}=await supabase.from("maima_clientes").select("id,nome_empresa,nif,contacto_nome,telefone,endereco").eq("id",profile.cliente_id).maybeSingle();
         setConta({
           clienteId:profile.cliente_id,
