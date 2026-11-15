@@ -313,11 +313,12 @@ export default function OperacaoPage() {
   const leadName=(id:string)=>leads.find(l=>l.id===id)?.nome||"Lead";
   function csvDownload(filename:string,headers:string[],rows:(string|number|null|boolean)[][]){
     const escape=(value:string|number|null|boolean)=>'"'+String(value??"").replace(/"/g,'""')+'"';
-    const content="\\uFEFF"+[headers,...rows].map(row=>row.map(escape).join(";")).join("\\r\\n");
+    const separator=String.fromCharCode(13,10);
+    const content=String.fromCharCode(65279)+[headers,...rows].map(row=>row.map(escape).join(";")).join(separator);
     const blob=new Blob([content],{type:"text/csv;charset=utf-8"});
     const url=URL.createObjectURL(blob);
     const link=document.createElement("a");
-    link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+    link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function exportLeads(){
     const rows=leads.map(l=>[
