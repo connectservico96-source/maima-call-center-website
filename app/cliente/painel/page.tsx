@@ -10,7 +10,7 @@ import { jsPDF } from "jspdf";
 type Pedido = { id:number; nome:string; empresa:string|null; area_interesse:string|null; mensagem:string; estado:string; criado_em:string };
 type Fatura = { id:number; referencia:string; valor:number; moeda:string; estado_pagamento:string; data_emissao:string; data_vencimento:string|null };
 type Campanha = { id:string; codigo:string; nome:string; setor:string; mercado:string; estado:string; data_inicio:string|null; data_fim:string|null };
-type Contrato = { id:string; campanha_id:string; referencia_externa:string|null; estado:string; submetido_em:string; validado_em:string|null; valor_comissao:number|null };
+type Contrato = { id:string; campanha_id:string; referencia_externa:string|null; estado:string; submetido_em:string; validado_em:string|null };
 const estadoClasses: Record<string,string> = {
   Novo:"bg-blue-50 text-blue-700", "Em análise":"bg-amber-50 text-amber-700",
   "Em andamento":"bg-violet-50 text-violet-700", Concluído:"bg-emerald-50 text-emerald-700",
@@ -42,7 +42,7 @@ export default function ClientePainelPage() {
       supabase.from("contactos").select("id,nome,empresa,area_interesse,mensagem,estado,criado_em").eq("user_id",user.id).order("criado_em",{ascending:false}),
       supabase.from("faturas").select("id,referencia,valor,moeda,estado_pagamento,data_emissao,data_vencimento").eq("user_id",user.id).order("data_emissao",{ascending:false}),
       supabase.from("maima_campanhas").select("id,codigo,nome,setor,mercado,estado,data_inicio,data_fim").order("criado_em",{ascending:false}),
-      supabase.from("maima_contratos").select("id,campanha_id,referencia_externa,estado,submetido_em,validado_em,valor_comissao").order("submetido_em",{ascending:false}),
+      supabase.from("maima_contratos").select("id,campanha_id,referencia_externa,estado,submetido_em,validado_em").order("submetido_em",{ascending:false}),
     ]);
     if(ordersResult.error) setError("Não foi possível carregar os seus pedidos. Tente novamente.");
     else {setPedidos((ordersResult.data??[]) as Pedido[]);setError("");}
