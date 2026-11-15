@@ -41,8 +41,8 @@ export default function ClientePainelPage() {
     const [ordersResult,invoicesResult,campaignsResult,contractsResult]=await Promise.all([
       supabase.from("contactos").select("id,nome,empresa,area_interesse,mensagem,estado,criado_em").eq("user_id",user.id).order("criado_em",{ascending:false}),
       supabase.from("faturas").select("id,referencia,valor,moeda,estado_pagamento,data_emissao,data_vencimento").eq("user_id",user.id).order("data_emissao",{ascending:false}),
-      supabase.from("maima_portal_campanhas").select("id,codigo,nome,setor,mercado,estado,data_inicio,data_fim").order("criado_em",{ascending:false}),
-      supabase.from("maima_portal_contratos").select("id,campanha_id,referencia_externa,estado,submetido_em,validado_em").order("submetido_em",{ascending:false}),
+      supabase.rpc("maima_portal_get_campanhas"),
+      supabase.rpc("maima_portal_get_contratos"),
     ]);
     if(ordersResult.error) setError("Não foi possível carregar os seus pedidos. Tente novamente.");
     else {setPedidos((ordersResult.data??[]) as Pedido[]);setError("");}
