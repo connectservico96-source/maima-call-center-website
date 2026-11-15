@@ -12,6 +12,7 @@ type Lead = { id: string; campanha_id: string; nome: string; telefone: string | 
 type Call = { id: string; lead_id: string; campanha_id: string; operador_id: string; chamada_em: string; resultado: string; duracao_segundos: number | null; notas: string | null; retorno_em: string | null; consentimento_confirmado: boolean };
 type Contract = { id: string; lead_id: string; campanha_id: string; operador_id: string; referencia_externa: string | null; estado: string; submetido_em: string; validado_em: string | null; motivo_rejeicao: string | null; motivo_cancelamento: string | null };
 type Quality = { id: string; operador_id: string; pontuacao: number; falhas_identificadas: string | null; acao_corretiva: string | null; avaliado_em: string };
+type Comissao = { id:string; contrato_id:string; campanha_id:string; operador_id:string; valor:number|null; moeda:string; estado:string };
 
 const LEAD_STATES = ["nova","atribuida","em_contacto","qualificada","proposta_apresentada","contrato_submetido","sem_interesse","nao_contactar","fechada"];
 const CALL_OUTCOMES = [
@@ -61,10 +62,11 @@ export default function OperacaoPage() {
   const [calls,setCalls] = useState<Call[]>([]);
   const [contracts,setContracts] = useState<Contract[]>([]);
   const [quality,setQuality] = useState<Quality[]>([]);
+  const [comissoes,setComissoes] = useState<Comissao[]>([]);
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState("");
   const [notice,setNotice] = useState("");
-  const [campaignForm,setCampaignForm] = useState({cliente_id:"",codigo:"",nome:"",setor:"Energia",mercado:"Portugal",valor:""});
+  const [campaignForm,setCampaignForm] = useState({cliente_id:"",codigo:"",nome:"",setor:"Energia",mercado:"Portugal",data_inicio:"",data_fim:"",valor:"",guiao_comercial:""});
   const [leadForm,setLeadForm] = useState({campanha_id:"",nome:"",telefone:"",email:"",origem:"Lead fornecida pelo contratante",operador_id:"",autorizacao_utilizacao:"pendente"});
   const [contractRef,setContractRef] = useState<Record<string,string>>({});
   const [contractReason,setContractReason] = useState<Record<string,string>>({});
@@ -84,7 +86,7 @@ export default function OperacaoPage() {
     if (!current.ativo) { await db.auth.signOut(); router.replace("/login"); return; }
     if (!["admin","coordenador","operador"].includes(current.role)) { router.replace("/cliente/painel"); return; }
     setProfile(current);
-    const [c, t, camp, l, ca, co, q] = await Promise.all([
+    const [c, t, camp, l, ca, co, q, finance] = await Promise.all([
       db.from("maima_clientes").select("id,nome_empresa,estado").order("nome_empresa"),
       db.from("maima_perfis").select("user_id,nome,email,role,cliente_id,ativo").in("role",["operador","coordenador","admin"]).order("role"),
       db.from("maima_campanhas").select("id,cliente_id,codigo,nome,setor,mercado,estado,valor_por_contrato_validado,moeda").order("criado_em",{ascending:false}),
@@ -92,8 +94,9 @@ export default function OperacaoPage() {
       db.from("maima_chamadas").select("id,lead_id,campanha_id,operador_id,chamada_em,resultado,duracao_segundos,notas,retorno_em,consentimento_confirmado").order("chamada_em",{ascending:false}),
       db.from("maima_contratos").select("id,lead_id,campanha_id,operador_id,referencia_externa,estado,submetido_em,validado_em,motivo_rejeicao,motivo_cancelamento").order("submetido_em",{ascending:false}),
       db.from("maima_qualidade").select("id,operador_id,pontuacao,falhas_identificadas,acao_corretiva,avaliado_em").order("avaliado_em",{ascending:false}),
+      db.from("maima_comissoes_contratos").select("id,contrato_id,campanha_id,operador_id,valor,moeda,estado").order("atualizado_em",{ascending:false}),
     ]);
-    const firstError = [c.error,t.error,camp.error,l.error,ca.error,co.error,q.error].find(Boolean);
+    const firstError = [c.error,t.error,camp.error,l.error,ca.error,co.error,q.error,finance.error].find(Boolean);
     if (firstError) setError("Alguns dados não puderam ser carregados: " + firstError.message);
     setClientes((c.data??[]) as Cliente[]);
     setTeam((t.data??[]) as Profile[]);
@@ -102,6 +105,7 @@ export default function OperacaoPage() {
     setCalls((ca.data??[]) as Call[]);
     setContracts((co.data??[]) as Contract[]);
     setQuality((q.data??[]) as Quality[]);
+    setComissoes((finance.data??[]) as Comissao[]);
     setLoading(false);
   },[router]);
 
@@ -116,7 +120,8 @@ export default function OperacaoPage() {
     validated:contracts.filter(c=>["validado","ativado"].includes(c.estado)).length,
     chargebacks:contracts.filter(c=>c.estado==="chargeback").length,
     blocked:leads.filter(l=>l.nao_contactar).length,
-  }),[leads,calls,contracts]);
+    fees:comissoes.filter(c=>c.estado==="ativa" && c.valor!==null).length,
+  }),[leads,calls,contracts,comissoes]);
 
   async function createCampaign(e:FormEvent<HTMLFormElement>) {
     e.preventDefault(); if(!profile) return;
@@ -127,9 +132,11 @@ export default function OperacaoPage() {
       cliente_id:campaignForm.cliente_id,codigo:campaignForm.codigo.trim(),nome:campaignForm.nome.trim(),
       setor:campaignForm.setor,mercado:campaignForm.mercado,
       valor_por_contrato_validado:amount,criado_por:profile.user_id,
+      data_inicio:campaignForm.data_inicio||null,data_fim:campaignForm.data_fim||null,
+      guiao_comercial:campaignForm.guiao_comercial.trim()||null,
     });
     if(insertError) setError("Não foi possível criar a campanha: "+insertError.message);
-    else {setNotice("Campanha criada.");setCampaignForm({cliente_id:"",codigo:"",nome:"",setor:"Energia",mercado:"Portugal",valor:""});await load();}
+    else {setNotice("Campanha criada.");setCampaignForm({cliente_id:"",codigo:"",nome:"",setor:"Energia",mercado:"Portugal",data_inicio:"",data_fim:"",valor:"",guiao_comercial:""});await load();}
     setSaving(false);
   }
 
@@ -303,7 +310,7 @@ export default function OperacaoPage() {
       {error&&<p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       {notice&&<p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-        {[[counts.leads,"Leads visíveis"],[counts.calls,"Chamadas registadas"],[counts.submitted,"Em validação"],[counts.validated,"Validados / ativados"],[counts.chargebacks,"Chargebacks"],[counts.blocked,"Bloqueados"]].map(([v,t])=><div key={String(t)} className="rounded-xl border bg-white p-4"><p className="text-sm text-slate-500">{t}</p><p className="mt-1 text-2xl font-bold">{v}</p></div>)}
+        {[[counts.leads,"Leads visíveis"],[counts.calls,"Chamadas registadas"],[counts.submitted,"Em validação"],[counts.validated,"Validados / ativados"],[counts.chargebacks,"Chargebacks"],[counts.blocked,"Bloqueados"],[counts.fees,"Comissões calculadas"]].map(([v,t])=><div key={String(t)} className="rounded-xl border bg-white p-4"><p className="text-sm text-slate-500">{t}</p><p className="mt-1 text-2xl font-bold">{v}</p></div>)}
       </div>
 
       {canManage&&<section className="mt-8 grid gap-5 lg:grid-cols-2">
@@ -314,8 +321,11 @@ export default function OperacaoPage() {
             <label className="text-sm font-semibold">Código<input required value={campaignForm.codigo} onChange={e=>setCampaignForm(v=>({...v,codigo:e.target.value.toUpperCase()}))} placeholder="ENERGIA-2026-01" className="mt-1 w-full rounded-lg border px-3 py-2"/></label>
             <label className="text-sm font-semibold sm:col-span-2">Nome da campanha<input required value={campaignForm.nome} onChange={e=>setCampaignForm(v=>({...v,nome:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2"/></label>
             <label className="text-sm font-semibold">Setor<input required value={campaignForm.setor} onChange={e=>setCampaignForm(v=>({...v,setor:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2"/></label>
+            <label className="text-sm font-semibold">Data de início<input type="date" value={campaignForm.data_inicio} onChange={e=>setCampaignForm(v=>({...v,data_inicio:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2"/></label>
+            <label className="text-sm font-semibold">Data de fim<input type="date" value={campaignForm.data_fim} onChange={e=>setCampaignForm(v=>({...v,data_fim:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2"/></label>
             <label className="text-sm font-semibold">Mercado<input required value={campaignForm.mercado} onChange={e=>setCampaignForm(v=>({...v,mercado:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2"/></label>
             <label className="text-sm font-semibold sm:col-span-2">Valor por contrato validado (opcional)<input type="number" min="0" step="0.01" value={campaignForm.valor} onChange={e=>setCampaignForm(v=>({...v,valor:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2"/><span className="text-xs font-normal text-slate-500">Deixe vazio até o valor estar confirmado por contrato.</span></label>
+            <label className="text-sm font-semibold sm:col-span-2">Guião comercial aprovado<textarea rows={4} value={campaignForm.guiao_comercial} onChange={e=>setCampaignForm(v=>({...v,guiao_comercial:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" placeholder="Inserir o guião e as condições aprovadas pelo contratante."/></label>
           </div>
           <button disabled={saving||clientes.length===0} className="mt-4 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Criar campanha</button>
         </form>
@@ -401,7 +411,7 @@ export default function OperacaoPage() {
         </form>
         <div className="rounded-2xl border bg-white p-5">
           <h2 className="text-lg font-bold">Indicadores por operador</h2><p className="mt-1 text-sm text-slate-500">Contagem de chamadas e contratos registados nesta operação.</p>
-          <div className="mt-4 space-y-3">{operators.map(o=>{const opCalls=calls.filter(c=>c.operador_id===o.user_id);const opContracts=contracts.filter(c=>c.operador_id===o.user_id);const opValidated=opContracts.filter(c=>["validado","ativado"].includes(c.estado)).length;return <div key={o.user_id} className="rounded-lg bg-slate-50 p-3"><p className="font-semibold">{o.nome||o.email}</p><p className="mt-1 text-sm text-slate-600">{opCalls.length} chamadas · {opContracts.length} contratos submetidos · {opValidated} validados</p></div>})}{operators.length===0&&<p className="text-sm text-slate-500">Ainda não existem operadores ativos. O administrador pode criar as contas e atribuir os perfis em “Equipa e acessos”.</p>}</div>
+          <div className="mt-4 space-y-3">{operators.map(o=>{const opCalls=calls.filter(c=>c.operador_id===o.user_id);const opContracts=contracts.filter(c=>c.operador_id===o.user_id);const opValidated=opContracts.filter(c=>["validado","ativado"].includes(c.estado)).length;const fees=comissoes.filter(c=>c.operador_id===o.user_id&&c.estado==="ativa"&&c.valor!==null);const totals=fees.reduce((acc,c)=>({...acc,[c.moeda]:(acc[c.moeda]||0)+Number(c.valor)} as Record<string,number>),{} as Record<string,number>);const feeText=Object.entries(totals).map(([currency,amount])=>new Intl.NumberFormat("pt-PT",{style:"currency",currency}).format(amount)).join(" · ");return <div key={o.user_id} className="rounded-lg bg-slate-50 p-3"><p className="font-semibold">{o.nome||o.email}</p><p className="mt-1 text-sm text-slate-600">{opCalls.length} chamadas · {opContracts.length} contratos submetidos · {opValidated} validados</p><p className="mt-1 text-xs text-emerald-800">Comissões validadas: {feeText||"valor não configurado"}</p></div>})}{operators.length===0&&<p className="text-sm text-slate-500">Ainda não existem operadores ativos. O administrador pode criar as contas e atribuir os perfis em “Equipa e acessos”.</p>}</div>
         </div>
       </section>}
       <p className="mt-8 text-center text-xs leading-5 text-slate-400">As leads com autorização pendente ou não autorizada não podem ser chamadas através deste módulo. Os valores de remuneração só devem ser configurados após confirmação contratual.</p>
