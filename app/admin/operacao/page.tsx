@@ -20,6 +20,28 @@ const CALL_OUTCOMES = [
   ["numero_invalido","Número inválido"],["nao_contactar","Não voltar a contactar"],
 ];
 const CONTRACT_STATES = ["submetido","em_validacao","validado","ativado","rejeitado","cancelado","chargeback"];
+function parseCSVRows(input:string): string[][] {
+  const firstLine=input.split(/\r?\n/,1)[0]||"";
+  const delimiter=(firstLine.match(/;/g)||[]).length>(firstLine.match(/,/g)||[]).length?";":",";
+  const rows:string[][]=[];let row:string[]=[];let field="";let quoted=false;
+  for(let i=0;i<input.length;i++){
+    const ch=input[i];
+    if(ch==='"'&&quoted&&input[i+1]==='"'){field+='"';i++;continue;}
+    if(ch==='"'){quoted=!quoted;continue;}
+    if(ch===delimiter&&!quoted){row.push(field.trim());field="";continue;}
+    if((ch==="\n"||ch==="\r")&&!quoted){
+      if(ch==="\r"&&input[i+1]==="\n")i++;
+      row.push(field.trim());field="";
+      if(row.some(cell=>cell.length>0))rows.push(row);
+      row=[];continue;
+    }
+    field+=ch;
+  }
+  row.push(field.trim());if(row.some(cell=>cell.length>0))rows.push(row);
+  return rows;
+}
+function csvHeader(value:string){return value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[\s-]+/g,"_");}
+
 const label = (v: string) => ({
   nova:"Nova", atribuida:"Atribuída", em_contacto:"Em contacto", qualificada:"Qualificada",
   proposta_apresentada:"Proposta apresentada", contrato_submetido:"Contrato submetido",
@@ -48,6 +70,8 @@ export default function OperacaoPage() {
   const [contractReason,setContractReason] = useState<Record<string,string>>({});
   const [qualityForm,setQualityForm] = useState({chamada_id:"",pontuacao:"90",falhas_identificadas:"",acao_corretiva:"",identificacao:false,finalidade:false,proposta:false,consentimento:false,sem_pressao:false,dados_confirmados:false});
   const [saving,setSaving] = useState(false);
+  const [csvCampaignId,setCsvCampaignId] = useState("");
+  const [csvOperatorId,setCsvOperatorId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -123,6 +147,67 @@ export default function OperacaoPage() {
     if(insertError) setError("Não foi possível registar a lead: "+insertError.message);
     else {setNotice("Lead registada. Só poderá ser contactada depois de confirmada a autorização de utilização.");setLeadForm({campanha_id:"",nome:"",telefone:"",email:"",origem:"Lead fornecida pelo contratante",operador_id:"",autorizacao_utilizacao:"pendente"});await load();}
     setSaving(false);
+  }
+
+  async function importCSV(e:FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if(!profile)return;
+    const form=e.currentTarget;
+    const fd=new FormData(form);
+    const file=fd.get("csv_file");
+    if(!(file instanceof File)||file.size===0){setError("Selecione um ficheiro CSV.");return;}
+    if(!csvCampaignId){setError("Selecione a campanha para importar as leads.");return;}
+    if(file.size>5*1024*1024){setError("O ficheiro CSV não pode ultrapassar 5 MB.");return;}
+    setSaving(true);setError("");setNotice("");
+    try{
+      const parsed=parseCSVRows(await file.text());
+      if(parsed.length<2)throw new Error("O ficheiro não contém linhas de dados.");
+      const headers=parsed[0].map(csvHeader);
+      const idx=(...names:string[])=>headers.findIndex(h=>names.includes(h));
+      const nameIdx=idx("nome","name");
+      const phoneIdx=idx("telefone","telemovel","phone");
+      const emailIdx=idx("email","e_mail");
+      const sourceIdx=idx("origem","source");
+      const refIdx=idx("referencia_origem","referencia","source_reference");
+      const authIdx=idx("autorizacao_utilizacao","autorizacao","authorization");
+      if(nameIdx<0||sourceIdx<0||(phoneIdx<0&&emailIdx<0))throw new Error("Cabeçalhos obrigatórios: nome, telefone ou email e origem.");
+      const existing=new Set<string>();
+      leads.filter(l=>l.campanha_id===csvCampaignId).forEach(l=>{
+        if(l.telefone)existing.add("p:"+l.telefone.replace(/\D/g,""));
+        if(l.email)existing.add("e:"+l.email.trim().toLowerCase());
+      });
+      const batch:string[]=[];
+      const payload:any[]=[];
+      let duplicates=0;
+      for(const cells of parsed.slice(1)){
+        const value=(i:number)=>i>=0?(cells[i]||"").trim():"";
+        const nome=value(nameIdx),telefone=value(phoneIdx),email=value(emailIdx),origem=value(sourceIdx);
+        if(!nome||!origem||(!telefone&&!email))continue;
+        const phoneKey=telefone?"p:"+telefone.replace(/\D/g,""):"";
+        const emailKey=email?"e:"+email.toLowerCase():"";
+        if((phoneKey&&existing.has(phoneKey))||(emailKey&&existing.has(emailKey))){duplicates++;continue;}
+        if(phoneKey)existing.add(phoneKey);if(emailKey)existing.add(emailKey);
+        const auth=value(authIdx).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+        const authorised=["autorizada","autorizado","sim","yes","true","1"].includes(auth);
+        const denied=["nao_autorizada","nao autorizado","nao autorizada","nao","no","false","0"].includes(auth);
+        payload.push({
+          campanha_id:csvCampaignId,nome,telefone:telefone||null,email:email||null,origem,
+          referencia_origem:value(refIdx)||null,
+          autorizacao_utilizacao:authorised?"autorizada":denied?"nao_autorizada":"pendente",
+          autorizacao_comprovada_em:authorised?new Date().toISOString():null,
+          operador_id:csvOperatorId||null,estado:csvOperatorId?"atribuida":"nova",
+          lote_importacao:crypto.randomUUID(),criado_por:profile.user_id,
+        });
+      }
+      if(payload.length===0)throw new Error("Não foram encontradas leads válidas novas para importar.");
+      if(payload.length>500)throw new Error("O ficheiro contém mais de 500 leads novas. Divida a importação em ficheiros mais pequenos.");
+      const {error:insertError}=await createClient().from("maima_leads").insert(payload);
+      if(insertError)throw new Error(insertError.message);
+      setNotice(payload.length+" lead(s) importada(s). "+duplicates+" duplicada(s) ignorada(s). Leads sem autorização confirmada permanecem bloqueadas para chamadas.");
+      form.reset();setCsvCampaignId("");setCsvOperatorId("");
+      await load();
+    }catch(err){setError(err instanceof Error?err.message:"Falha ao importar o ficheiro CSV.");}
+    finally{setSaving(false);}
   }
 
   async function assignLead(lead:Lead,operatorId:string) {
@@ -249,6 +334,18 @@ export default function OperacaoPage() {
         </form>
       </section>}
 
+      {canManage&&<form onSubmit={importCSV} className="mt-5 rounded-2xl border bg-white p-5">
+        <h2 className="text-lg font-bold">Importar leads por CSV</h2>
+        <p className="mt-1 text-sm text-slate-500">Importe uma lista fornecida ou autorizada pelo contratante, associe-a à campanha e, opcionalmente, a um operador.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <label className="text-sm font-semibold">Campanha<select required value={csvCampaignId} onChange={e=>setCsvCampaignId(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2"><option value="">Selecionar campanha</option>{campaigns.map(c=><option key={c.id} value={c.id}>{c.codigo} — {c.nome}</option>)}</select></label>
+          <label className="text-sm font-semibold">Atribuir a operador (opcional)<select value={csvOperatorId} onChange={e=>setCsvOperatorId(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2"><option value="">Sem atribuição</option>{operators.map(o=><option key={o.user_id} value={o.user_id}>{o.nome||o.email}</option>)}</select></label>
+          <label className="text-sm font-semibold">Ficheiro CSV<input required type="file" name="csv_file" accept=".csv,text/csv" className="mt-1 block w-full rounded-lg border p-2 text-xs font-normal"/></label>
+        </div>
+        <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">Cabeçalhos: <strong>nome, telefone, email, origem, referencia_origem, autorizacao_utilizacao</strong>. São obrigatórios nome, origem e pelo menos telefone ou email. A autorização deve ser “autorizada”, “pendente” ou “nao_autorizada”. A importação limita-se a 500 leads por ficheiro e ignora duplicados encontrados na campanha.</p>
+        <button disabled={saving||campaigns.length===0} className="mt-4 rounded-lg bg-[#103B70] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Importar leads</button>
+      </form>}
+
       <section className="mt-9 rounded-2xl border bg-white p-5">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-bold">Leads da operação</h2><p className="mt-1 text-sm text-slate-500">{canManage?"Distribua leads e acompanhe o trabalho da equipa.":"Consulte as leads que lhe foram atribuídas e registe cada tentativa de contacto."}</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold">{leads.length} registos</span></div>
         <div className="mt-5 space-y-4">
@@ -269,11 +366,11 @@ export default function OperacaoPage() {
                 <label className="mt-3 block text-xs font-semibold">Notas<textarea name="notas" rows={2} className="mt-1 w-full rounded-lg border bg-white px-3 py-2"/></label>
                 <button disabled={saving} className="mt-3 rounded-lg bg-[#103B70] px-4 py-2 text-sm font-semibold text-white">Guardar chamada</button>
               </form>
-              <form onSubmit={e=>void submitContract(e,lead)} className="rounded-lg border border-emerald-200 p-4">
-                <h4 className="font-semibold">Submeter contrato</h4><p className="mt-1 text-xs leading-5 text-slate-500">Utilize depois de confirmar o interesse, o consentimento e todos os elementos exigidos no guião aprovado.</p>
+              {calls.some(c=>c.lead_id===lead.id && c.resultado==="interessado" && c.consentimento_confirmado) ? <form onSubmit={e=>void submitContract(e,lead)} className="rounded-lg border border-emerald-200 p-4">
+                <h4 className="font-semibold">Submeter contrato</h4><p className="mt-1 text-xs leading-5 text-slate-500">Utilize depois de confirmar interesse, consentimento e todos os elementos exigidos no guião aprovado.</p>
                 <label className="mt-3 block text-xs font-semibold">Referência do contrato (opcional)<input value={contractRef[lead.id]||""} onChange={e=>setContractRef(v=>({...v,[lead.id]:e.target.value}))} className="mt-1 w-full rounded-lg border px-3 py-2"/></label>
                 <button disabled={saving} className="mt-3 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Registar contrato submetido</button>
-              </form>
+              </form> : <div className="rounded-lg border border-emerald-200 p-4 text-sm text-slate-600">O registo do contrato ficará disponível depois de guardar uma chamada com resultado “Interessado” e consentimento confirmado.</div>}
             </div>}
             {profile.role==="operador"&&lead.autorizacao_utilizacao!=="autorizada"&&<p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Esta lead está bloqueada para chamadas até a coordenação confirmar a autorização.</p>}
             {calls.filter(c=>c.lead_id===lead.id).length>0&&<details className="mt-3"><summary className="cursor-pointer text-sm font-semibold text-slate-700">Histórico de chamadas ({calls.filter(c=>c.lead_id===lead.id).length})</summary><div className="mt-2 space-y-2">{calls.filter(c=>c.lead_id===lead.id).map(c=><div key={c.id} className="rounded-lg bg-slate-50 p-3 text-sm"><p className="font-semibold">{CALL_OUTCOMES.find(x=>x[0]===c.resultado)?.[1]||c.resultado} · {fmt(c.chamada_em)}</p><p className="mt-1 text-slate-600">{c.notas||"Sem observações"} {c.duracao_segundos!==null?"· "+c.duracao_segundos+" s":""}</p></div>)}</div></details>}
