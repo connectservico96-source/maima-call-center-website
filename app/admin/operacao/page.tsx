@@ -148,7 +148,7 @@ export default function OperacaoPage() {
   }
 
   async function createLead(e:FormEvent<HTMLFormElement>) {
-    e.preventDefault(); setSaving(true); setError(""); setNotice("");
+    e.preventDefault(); setError(""); setNotice("");
     const authorised=leadForm.autorizacao_utilizacao==="autorizada";
     if(authorised&&!leadForm.autorizacao_referencia.trim()){setError("Indique a referência do documento ou autorização do contratante antes de libertar a lead para chamadas.");return;}
     setSaving(true);
