@@ -27,7 +27,8 @@ create index if not exists maima_telefonia_eventos_estado_idx
 alter table public.maima_telefonia_eventos enable row level security;
 
 revoke all on table public.maima_telefonia_eventos from anon, authenticated;
-grant select, update on table public.maima_telefonia_eventos to authenticated;
+grant select on table public.maima_telefonia_eventos to authenticated;
+grant insert on table public.maima_telefonia_eventos to service_role;
 
 drop policy if exists "MAIMA coordenacao consulta eventos telefonia" on public.maima_telefonia_eventos;
 create policy "MAIMA coordenacao consulta eventos telefonia"
@@ -36,11 +37,6 @@ create policy "MAIMA coordenacao consulta eventos telefonia"
   using (public.maima_current_role() = any (array['admin','coordenador']::text[]));
 
 drop policy if exists "MAIMA coordenacao atualiza eventos telefonia" on public.maima_telefonia_eventos;
-create policy "MAIMA coordenacao atualiza eventos telefonia"
-  on public.maima_telefonia_eventos
-  for update to authenticated
-  using (public.maima_current_role() = any (array['admin','coordenador']::text[]))
-  with check (public.maima_current_role() = any (array['admin','coordenador']::text[]));
 
 comment on table public.maima_telefonia_eventos is
   'Caixa de entrada normalizada de eventos de telefonia externa; sem gravações ou payload bruto.';
