@@ -22,6 +22,8 @@ Website institucional e plataforma de gestão comercial da MAIMA CALL CENTER, de
 - Painel administrativo para pedidos, notas internas, faturação e revisão de comprovativos.
 - Gestão de utilizadores e atribuição de perfis.
 - CRM operacional com campanhas, guiões, importação CSV de leads, distribuição por operador, registo de chamadas, retornos, contratos, validação, chargebacks, controlo de qualidade e indicadores.
+- Relatórios operacionais por período, campanha e operador, com indicadores de contacto, interesse, contratos, qualidade, comissões e despesas; exportação CSV e impressão/PDF.
+- Registo interno de despesas por campanha ou como custo geral, com histórico de anulações e acesso restrito a administração/coordenação.
 - Exportação CSV de leads e chamadas.
 
 ## Perfis de acesso
@@ -67,6 +69,8 @@ npm run start
 - `app/admin/page.tsx`: administração de pedidos e faturação
 - `app/admin/equipa/page.tsx`: perfis e acessos
 - `app/admin/operacao/page.tsx`: CRM operacional
+- `app/admin/relatorios/page.tsx`: relatórios operacionais por período, campanha e operador
+- `app/admin/custos/page.tsx`: registo e consulta de despesas operacionais
 - `app/cliente/painel/page.tsx`: Área de Cliente empresarial
 - `app/registar/page.tsx`: registo de clientes
 - `app/login/page.tsx`: autenticação e encaminhamento por perfil
@@ -75,7 +79,7 @@ npm run start
 
 ## Limites conhecidos da primeira versão operacional
 - O registo de chamadas é manual; não existe ainda integração com telefonia, gravações ou sincronização automática com CRM externo.
-- Os indicadores atuais são contagens operacionais de base; faltam relatórios históricos completos, taxas de conversão por período, custo por contrato válido e relatórios automáticos.
+- Os relatórios permitem filtrar por datas, campanha e operador, e incluem despesas registadas. O custo por validação é uma métrica operacional simples: despesas no período divididas pelas validações registadas no período; custos gerais não são distribuídos por campanha, moedas diferentes não são convertidas e custos não são atribuídos a operadores. O envio automático de relatórios ainda não está configurado.
 - A criação de contas de operadores/coordenadores começa pelo registo individual e atribuição posterior do perfil pela administração.
 - As páginas legais são textos de trabalho, não aconselhamento jurídico nem confirmação de conformidade.
 - A faturação PDF do portal não substitui, por si só, um sistema de faturação certificado.
