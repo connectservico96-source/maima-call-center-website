@@ -10,7 +10,7 @@ type Cliente = { id: string; nome_empresa: string; estado: string };
 type Campaign = { id: string; cliente_id: string; codigo: string; nome: string; setor: string; mercado: string; estado: string; data_inicio: string | null; data_fim: string | null; guiao_comercial: string | null; valor_por_contrato_validado: number | null; moeda: string };
 type Lead = { id: string; campanha_id: string; nome: string; telefone: string | null; email: string | null; origem: string; autorizacao_utilizacao: string; autorizacao_referencia: string | null; autorizacao_validada_por: string | null; estado: string; operador_id: string | null; observacoes_operador: string | null; proxima_acao_em: string | null; nao_contactar: boolean; criado_em:string };
 type Call = { id: string; lead_id: string; campanha_id: string; operador_id: string; chamada_em: string; tentativa_numero:number; resultado: string; duracao_segundos: number | null; notas: string | null; retorno_em: string | null; consentimento_confirmado: boolean; consentimento_em:string|null };
-type Contract = { id: string; lead_id: string; campanha_id: string; operador_id: string; referencia_externa: string | null; estado: string; submetido_em: string; validado_em: string | null; motivo_rejeicao: string | null; motivo_cancelamento: string | null };
+type Contract = { id: string; lead_id: string; campanha_id: string; operador_id: string; referencia_externa: string | null; estado: string; submetido_em: string; validado_em: string | null; ativado_em: string | null; cancelado_em: string | null; motivo_rejeicao: string | null; motivo_cancelamento: string | null };
 type Quality = { id: string; operador_id: string; pontuacao: number; falhas_identificadas: string | null; acao_corretiva: string | null; avaliado_em: string };
 type Comissao = { id:string; contrato_id:string; campanha_id:string; operador_id:string; valor:number|null; moeda:string; estado:string };
 
@@ -93,7 +93,7 @@ export default function OperacaoPage() {
       db.from("maima_campanha_condicoes").select("campanha_id,valor_por_contrato_validado,moeda"),
       db.from("maima_leads").select("id,campanha_id,nome,telefone,email,origem,autorizacao_utilizacao,autorizacao_referencia,autorizacao_validada_por,estado,operador_id,observacoes_operador,proxima_acao_em,nao_contactar,criado_em").order("criado_em",{ascending:false}),
       db.from("maima_chamadas").select("id,lead_id,campanha_id,operador_id,chamada_em,tentativa_numero,resultado,duracao_segundos,notas,retorno_em,consentimento_confirmado,consentimento_em").order("chamada_em",{ascending:false}),
-      db.from("maima_contratos").select("id,lead_id,campanha_id,operador_id,referencia_externa,estado,submetido_em,validado_em,motivo_rejeicao,motivo_cancelamento").order("submetido_em",{ascending:false}),
+      db.from("maima_contratos").select("id,lead_id,campanha_id,operador_id,referencia_externa,estado,submetido_em,validado_em,ativado_em,cancelado_em,motivo_rejeicao,motivo_cancelamento").order("submetido_em",{ascending:false}),
       db.from("maima_qualidade").select("id,operador_id,pontuacao,falhas_identificadas,acao_corretiva,avaliado_em").order("avaliado_em",{ascending:false}),
       db.from("maima_comissoes_contratos").select("id,contrato_id,campanha_id,operador_id,valor,moeda,estado").order("atualizado_em",{ascending:false}),
     ]);
@@ -284,9 +284,12 @@ export default function OperacaoPage() {
   }
 
   async function changeContract(contract:Contract,status:string) {
-    const patch:any={estado:status};
+    const now=new Date().toISOString();
+    const patch:any={estado:status,atualizado_em:now};
+    if(status==="validado"&&!contract.validado_em) patch.validado_em=now;
+    if(status==="ativado"){if(!contract.validado_em)patch.validado_em=now;if(!contract.ativado_em)patch.ativado_em=now;}
+    if(status==="cancelado"||status==="chargeback"){patch.motivo_cancelamento=contractReason[contract.id]||null;if(!contract.cancelado_em)patch.cancelado_em=now;}
     if(status==="rejeitado") patch.motivo_rejeicao=contractReason[contract.id]||null;
-    if(status==="cancelado"||status==="chargeback") patch.motivo_cancelamento=contractReason[contract.id]||null;
     const {error:updateError}=await createClient().from("maima_contratos").update(patch).eq("id",contract.id);
     if(updateError) setError("Não foi possível atualizar o contrato: "+updateError.message);
     else {setNotice("Estado do contrato atualizado.");await load();}
@@ -354,7 +357,7 @@ export default function OperacaoPage() {
   return <main className="min-h-screen bg-slate-50">
     <header className="border-b bg-white"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-5">
       <div><p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-700">MAIMA CALL CENTER</p><h1 className="mt-1 text-xl font-bold text-slate-900">CRM operacional</h1><p className="mt-1 text-xs text-slate-500">{profile.nome||profile.email} · {profile.role}</p></div>
-      <div className="flex flex-wrap gap-2">{profile.role==="admin"&&<Link href="/admin" className="rounded-lg border px-3 py-2 text-sm font-semibold">Painel administrativo</Link>}{profile.role==="admin"&&<Link href="/admin/equipa" className="rounded-lg border px-3 py-2 text-sm font-semibold">Equipa e acessos</Link>}<button onClick={()=>void load()} className="rounded-lg bg-[#103B70] px-4 py-2 text-sm font-semibold text-white">Atualizar</button><button onClick={async()=>{await createClient().auth.signOut();router.replace("/login");router.refresh();}} className="rounded-lg border px-3 py-2 text-sm font-semibold">Terminar sessão</button></div>
+      <div className="flex flex-wrap gap-2">{profile.role==="admin"&&<Link href="/admin" className="rounded-lg border px-3 py-2 text-sm font-semibold">Painel administrativo</Link>}{profile.role==="admin"&&<Link href="/admin/equipa" className="rounded-lg border px-3 py-2 text-sm font-semibold">Equipa e acessos</Link>}{canManage&&<Link href="/admin/relatorios" className="rounded-lg border px-3 py-2 text-sm font-semibold">Relatórios</Link>}<button onClick={()=>void load()} className="rounded-lg bg-[#103B70] px-4 py-2 text-sm font-semibold text-white">Atualizar</button><button onClick={async()=>{await createClient().auth.signOut();router.replace("/login");router.refresh();}} className="rounded-lg border px-3 py-2 text-sm font-semibold">Terminar sessão</button></div>
     </div></header>
     <section className="mx-auto max-w-7xl px-5 py-8">
       {error&&<p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
