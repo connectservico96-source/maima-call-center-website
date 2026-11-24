@@ -21,7 +21,9 @@ export async function POST(request: Request) {
     return Response.json({ error: "Integração telefónica ainda não configurada." }, { status: 503 });
   }
 
-  if (!tokenValido(request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? null, webhookToken)) {
+  const authorization = request.headers.get("authorization");
+  const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null;
+  if (!tokenValido(bearer, webhookToken)) {
     return Response.json({ error: "Não autorizado." }, { status: 401 });
   }
 
