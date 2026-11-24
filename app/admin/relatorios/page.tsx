@@ -248,7 +248,7 @@ export default function RelatoriosPage() {
     const rows: (string | number | null)[][] = [
       ["Tipo", "Nome", "Leads", "Chamadas", "Interessados", "Contratos submetidos", "Contratos validados", "Taxa de validação", "Despesas", "Custo por validação"],
       ...campaignReport.map(x => ["Campanha", x.codigo + " - " + x.nome, x.leads, x.calls, x.interested, x.submitted, x.validated, x.conversion, operatorFilter === "all" ? x.expenses : "—", operatorFilter === "all" ? x.costPerValidated : "—"]),
-      ...operatorReport.map(x => ["Operador", x.nome || x.email, "", x.calls, x.interested, x.submitted, x.validated, pct(x.validated, x.submitted)]),
+      ...operatorReport.map(x => ["Operador", x.nome || x.email, "", x.calls, x.interested, x.submitted, x.validated, pct(x.validated, x.submitted), "—", "—"]),
     ];
     csvDownload("maima-relatorio-operacional-" + from + "-a-" + to + ".csv", rows);
   }
@@ -381,7 +381,7 @@ export default function RelatoriosPage() {
         )}
 
         <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-950">
-          Nota de leitura: os indicadores são calculados a partir dos registos existentes e dos campos de data guardados. A taxa de validação compara submissões do período com validações registadas no período. As despesas gerais (sem campanha) entram apenas no total global, não são distribuídas pelas campanhas. Para custo por campanha são consideradas apenas despesas ligadas diretamente à campanha e na moeda da campanha. Não há conversão cambial nem atribuição de custos a operadores; por isso, o custo por contrato só é apresentado ao selecionar toda a equipa. Comissões ativas não são custos operacionais nem pagamentos confirmados.
+          Nota de leitura: a taxa por campanha compara as submissões do período que estão atualmente validadas/ativadas com o total submetido no mesmo período; o KPI de validações no período usa as datas de validação/ativação registadas. O custo por validação divide as despesas ativas do período pelas validações registadas nesse período. As despesas gerais (sem campanha) entram apenas no total global e não são distribuídas pelas campanhas. O custo por campanha considera apenas despesas diretamente associadas e na moeda da campanha. Não há conversão cambial nem atribuição de custos a operadores; por isso, os custos ficam ocultos quando se filtra um operador. Comissões ativas não são custos operacionais nem pagamentos confirmados.
         </p>
       </section>
     </main>
