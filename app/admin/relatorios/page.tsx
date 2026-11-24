@@ -6,7 +6,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 type Profile = { user_id: string; nome: string | null; email: string; role: string; ativo: boolean };
-type Campaign = { id: string; codigo: string; nome: string; estado: string };
+type Campaign = { id: string; codigo: string; nome: string; estado: string; moeda: string };
+type Expense = { id: string; campanha_id: string | null; data_despesa: string; categoria: string; descricao: string; valor: number; moeda: string; estado: string; motivo_anulacao: string | null };
 type Lead = { id: string; campanha_id: string; operador_id: string | null; criado_em: string; autorizacao_utilizacao: string; nao_contactar: boolean };
 type Call = { id: string; campanha_id: string; operador_id: string; lead_id: string; chamada_em: string; resultado: string; duracao_segundos: number | null };
 type Contract = { id: string; campanha_id: string; operador_id: string; estado: string; submetido_em: string; validado_em: string | null; ativado_em: string | null; cancelado_em: string | null; atualizado_em: string };
@@ -18,6 +19,7 @@ function dateInput(value: Date) {
 }
 function inRange(value: string | null | undefined, from: string, to: string) {
   if (!value) return false;
+  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return (!from || value >= from) && (!to || value <= to);
   const timestamp = new Date(value).getTime();
   if (!Number.isFinite(timestamp)) return false;
   const start = from ? new Date(from + "T00:00:00").getTime() : Number.NEGATIVE_INFINITY;
@@ -63,6 +65,7 @@ export default function RelatoriosPage() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [quality, setQuality] = useState<Quality[]>([]);
   const [commissions, setCommissions] = useState<Commission[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -99,14 +102,15 @@ export default function RelatoriosPage() {
     }
     setProfile(me as Profile);
     try {
-      const [campaignRows, teamRows, leadRows, callRows, contractRows, qualityRows, commissionRows] = await Promise.all([
-        fetchAll(db.from("maima_campanhas").select("id,codigo,nome,estado").order("criado_em", { ascending: false })),
+      const [campaignRows, teamRows, leadRows, callRows, contractRows, qualityRows, commissionRows, expenseRows] = await Promise.all([
+        fetchAll(db.from("maima_campanhas").select("id,codigo,nome,estado,moeda").order("criado_em", { ascending: false })),
         fetchAll(db.from("maima_perfis").select("user_id,nome,email,role,ativo").eq("role", "operador").order("nome")),
         fetchAll(db.from("maima_leads").select("id,campanha_id,operador_id,criado_em,autorizacao_utilizacao,nao_contactar").order("criado_em", { ascending: false })),
         fetchAll(db.from("maima_chamadas").select("id,campanha_id,operador_id,lead_id,chamada_em,resultado,duracao_segundos").order("chamada_em", { ascending: false })),
         fetchAll(db.from("maima_contratos").select("id,campanha_id,operador_id,estado,submetido_em,validado_em,ativado_em,cancelado_em,atualizado_em").order("submetido_em", { ascending: false })),
         fetchAll(db.from("maima_qualidade").select("id,campanha_id,operador_id,pontuacao,avaliado_em").order("avaliado_em", { ascending: false })),
         fetchAll(db.from("maima_comissoes_contratos").select("id,campanha_id,operador_id,valor,moeda,estado,atualizado_em").order("atualizado_em", { ascending: false })),
+        fetchAll(db.from("maima_despesas").select("id,campanha_id,data_despesa,categoria,descricao,valor,moeda,estado,motivo_anulacao").eq("estado", "ativa").order("data_despesa", { ascending: false })),
       ]);
       setCampaigns(campaignRows as Campaign[]);
       setTeam(teamRows as Profile[]);
@@ -115,6 +119,7 @@ export default function RelatoriosPage() {
       setContracts(contractRows as Contract[]);
       setQuality(qualityRows as Quality[]);
       setCommissions(commissionRows as Commission[]);
+      setExpenses(expenseRows as Expense[]);
     } catch (err) {
       setError("Não foi possível carregar todos os dados dos relatórios: " + (err instanceof Error ? err.message : "erro desconhecido"));
     } finally {
@@ -162,6 +167,18 @@ export default function RelatoriosPage() {
     (operatorFilter === "all" || x.operador_id === operatorFilter)
   ), [commissions, from, to, campaignFilter, operatorFilter]);
 
+  const filteredExpenses = expenses.filter(x =>
+    inRange(x.data_despesa, from, to) && (campaignFilter === "all" || x.campanha_id === campaignFilter)
+  );
+  const expenseTotals = filteredExpenses.reduce((acc, item) => {
+    acc[item.moeda] = (acc[item.moeda] || 0) + Number(item.valor);
+    return acc;
+  }, {} as Record<string, number>);
+  const expenseText = Object.entries(expenseTotals).map(([code, amount]) => currency(amount, code)).join(" · ");
+  const expenseCostPerValidation = filteredValidations.length > 0
+    ? Object.entries(expenseTotals).map(([code, amount]) => currency(amount / filteredValidations.length, code) + " / contrato").join(" · ")
+    : "—";
+
   const contactedCalls = filteredCalls.filter(x => !["nao_atendida", "ocupado", "numero_invalido"].includes(x.resultado));
   const interestedCalls = filteredCalls.filter(x => x.resultado === "interessado");
   const validatedCohort = filteredContracts.filter(x => ["validado", "ativado"].includes(x.estado));
@@ -181,12 +198,17 @@ export default function RelatoriosPage() {
       const campaignLeads = filteredLeads.filter(x => x.campanha_id === c.id);
       const campaignCalls = filteredCalls.filter(x => x.campanha_id === c.id);
       const submitted = filteredContracts.filter(x => x.campanha_id === c.id);
-      const validated = submitted.filter(x => ["validado", "ativado"].includes(x.estado));
+      const validated = filteredValidations.filter(x => x.campanha_id === c.id);
       const interested = campaignCalls.filter(x => x.resultado === "interessado").length;
+      const campaignExpenses = filteredExpenses.filter(x => x.campanha_id === c.id);
+      const campaignExpenseTotal = campaignExpenses.filter(x => x.moeda === c.moeda).reduce((sum, x) => sum + Number(x.valor), 0);
+      const campaignExpenseText = Object.entries(campaignExpenses.reduce((acc, x) => { acc[x.moeda] = (acc[x.moeda] || 0) + Number(x.valor); return acc; }, {} as Record<string, number>)).map(([code, amount]) => currency(amount, code)).join(" · ");
       return {
         ...c, leads: campaignLeads.length, calls: campaignCalls.length,
         interested, submitted: submitted.length, validated: validated.length,
         conversion: pct(validated.length, submitted.length),
+        expenses: campaignExpenseText || "—",
+        costPerValidated: validated.length > 0 ? currency(campaignExpenseTotal / validated.length, c.moeda) : "—",
       };
     }), [campaigns, campaignFilter, filteredLeads, filteredCalls, filteredContracts]);
 
@@ -260,6 +282,7 @@ export default function RelatoriosPage() {
           <div className="flex flex-wrap gap-2">
             <Link href="/admin/operacao" className="rounded-lg border px-3 py-2 text-sm font-semibold">CRM operacional</Link>
             {profile.role === "admin" && <Link href="/admin/equipa" className="rounded-lg border px-3 py-2 text-sm font-semibold">Equipa e acessos</Link>}
+            <Link href="/admin/custos" className="rounded-lg border px-3 py-2 text-sm font-semibold">Despesas</Link>
             {profile.role === "admin" && <Link href="/admin" className="rounded-lg border px-3 py-2 text-sm font-semibold">Painel administrativo</Link>}
             <button onClick={() => void load()} className="rounded-lg bg-[#103B70] px-3 py-2 text-sm font-semibold text-white">Atualizar dados</button>
           </div>
@@ -304,6 +327,8 @@ export default function RelatoriosPage() {
               {card("Validações no período", filteredValidations.length, "Data de validação ou ativação registada")}
               {card("Qualidade média", avgQuality === null ? "—" : avgQuality.toFixed(1) + " / 100", filteredQuality.length + " chamadas avaliadas")}
               {card("Comissões ativas", activeCommissionText || "—", filteredCommissions.length + " registos atualizados no período")}
+              {card("Despesas registadas", operatorFilter === "all" ? (expenseText || "—") : "—", operatorFilter === "all" ? filteredExpenses.length + " despesas ativas no período" : "Custos não são atribuídos individualmente a operadores")}
+              {card("Custo por contrato validado", operatorFilter === "all" ? expenseCostPerValidation : "—", operatorFilter === "all" ? "Despesas do período ÷ validações do período; por moeda" : "Selecione toda a equipa para consultar custos")}
             </section>
 
             <section className="mt-8 grid gap-5 lg:grid-cols-2">
@@ -332,8 +357,8 @@ export default function RelatoriosPage() {
                 <p className="mt-1 text-sm text-slate-500">Leads, atividade, submissões e validação por campanha.</p>
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full min-w-[620px] text-left text-sm">
-                    <thead><tr className="border-b text-xs text-slate-500"><th className="py-2 pr-3">Campanha</th><th className="py-2 pr-3">Leads</th><th className="py-2 pr-3">Chamadas</th><th className="py-2 pr-3">Interessados</th><th className="py-2 pr-3">Contratos</th><th className="py-2">Validados</th></tr></thead>
-                    <tbody>{campaignReport.map(c => <tr key={c.id} className="border-b last:border-0"><td className="py-3 pr-3"><strong>{c.codigo}</strong><p className="text-xs text-slate-500">{c.nome}</p></td><td className="py-3 pr-3">{c.leads}</td><td className="py-3 pr-3">{c.calls}</td><td className="py-3 pr-3">{c.interested}</td><td className="py-3 pr-3">{c.submitted}</td><td className="py-3">{c.validated} <span className="text-xs text-slate-500">({c.conversion})</span></td></tr>)}</tbody>
+                    <thead><tr className="border-b text-xs text-slate-500"><th className="py-2 pr-3">Campanha</th><th className="py-2 pr-3">Leads</th><th className="py-2 pr-3">Chamadas</th><th className="py-2 pr-3">Interessados</th><th className="py-2 pr-3">Contratos</th><th className="py-2 pr-3">Validados</th><th className="py-2 pr-3">Despesas</th><th className="py-2">Custo/validado</th></tr></thead>
+                    <tbody>{campaignReport.map(c => <tr key={c.id} className="border-b last:border-0"><td className="py-3 pr-3"><strong>{c.codigo}</strong><p className="text-xs text-slate-500">{c.nome}</p></td><td className="py-3 pr-3">{c.leads}</td><td className="py-3 pr-3">{c.calls}</td><td className="py-3 pr-3">{c.interested}</td><td className="py-3 pr-3">{c.submitted}</td><td className="py-3 pr-3">{c.validated} <span className="text-xs text-slate-500">({c.conversion})</span></td><td className="py-3 pr-3">{c.expenses}</td><td className="py-3">{c.costPerValidated}</td></tr>)}</tbody>
                   </table>
                   {campaignReport.length === 0 && <p className="py-5 text-sm text-slate-500">Não existem campanhas para este filtro.</p>}
                 </div>
@@ -355,7 +380,7 @@ export default function RelatoriosPage() {
         )}
 
         <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-950">
-          Nota de leitura: os indicadores são calculados a partir dos registos existentes e dos campos de data guardados. A taxa de validação compara os contratos submetidos no período com o estado atual desses contratos. Comissões ativas não são custos operacionais nem pagamentos confirmados. O sistema ainda não regista despesas, pelo que não calcula custo por contrato. Para histórico fiável, as transições de estado devem ser registadas no momento em que acontecem.
+          Nota de leitura: os indicadores são calculados a partir dos registos existentes e dos campos de data guardados. A taxa de validação compara submissões do período com validações registadas no período. As despesas gerais (sem campanha) entram apenas no total global, não são distribuídas pelas campanhas. Para custo por campanha são consideradas apenas despesas ligadas diretamente à campanha e na moeda da campanha. Não há conversão cambial nem atribuição de custos a operadores; por isso, o custo por contrato só é apresentado ao selecionar toda a equipa. Comissões ativas não são custos operacionais nem pagamentos confirmados.
         </p>
       </section>
     </main>
