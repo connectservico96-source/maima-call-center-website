@@ -19,7 +19,7 @@ function dateInput(value: Date) {
 }
 function inRange(value: string | null | undefined, from: string, to: string) {
   if (!value) return false;
-  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return (!from || value >= from) && (!to || value <= to);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return (!from || value >= from) && (!to || value <= to);
   const timestamp = new Date(value).getTime();
   if (!Number.isFinite(timestamp)) return false;
   const start = from ? new Date(from + "T00:00:00").getTime() : Number.NEGATIVE_INFINITY;
@@ -167,9 +167,9 @@ export default function RelatoriosPage() {
     (operatorFilter === "all" || x.operador_id === operatorFilter)
   ), [commissions, from, to, campaignFilter, operatorFilter]);
 
-  const filteredExpenses = expenses.filter(x =>
+  const filteredExpenses = useMemo(() => expenses.filter(x =>
     inRange(x.data_despesa, from, to) && (campaignFilter === "all" || x.campanha_id === campaignFilter)
-  );
+  ), [expenses, from, to, campaignFilter]);
   const expenseTotals = filteredExpenses.reduce((acc, item) => {
     acc[item.moeda] = (acc[item.moeda] || 0) + Number(item.valor);
     return acc;
@@ -198,7 +198,8 @@ export default function RelatoriosPage() {
       const campaignLeads = filteredLeads.filter(x => x.campanha_id === c.id);
       const campaignCalls = filteredCalls.filter(x => x.campanha_id === c.id);
       const submitted = filteredContracts.filter(x => x.campanha_id === c.id);
-      const validated = filteredValidations.filter(x => x.campanha_id === c.id);
+      const validated = submitted.filter(x => ["validado", "ativado"].includes(x.estado));
+      const validationsInPeriod = filteredValidations.filter(x => x.campanha_id === c.id);
       const interested = campaignCalls.filter(x => x.resultado === "interessado").length;
       const campaignExpenses = filteredExpenses.filter(x => x.campanha_id === c.id);
       const campaignExpenseTotal = campaignExpenses.filter(x => x.moeda === c.moeda).reduce((sum, x) => sum + Number(x.valor), 0);
@@ -208,9 +209,9 @@ export default function RelatoriosPage() {
         interested, submitted: submitted.length, validated: validated.length,
         conversion: pct(validated.length, submitted.length),
         expenses: campaignExpenseText || "—",
-        costPerValidated: validated.length > 0 ? currency(campaignExpenseTotal / validated.length, c.moeda) : "—",
+        costPerValidated: validationsInPeriod.length > 0 ? currency(campaignExpenseTotal / validationsInPeriod.length, c.moeda) : "—",
       };
-    }), [campaigns, campaignFilter, filteredLeads, filteredCalls, filteredContracts]);
+    }), [campaigns, campaignFilter, filteredLeads, filteredCalls, filteredContracts, filteredValidations, filteredExpenses]);
 
   const operatorReport = useMemo(() => team
     .filter(o => operatorFilter === "all" || o.user_id === operatorFilter)
@@ -245,8 +246,8 @@ export default function RelatoriosPage() {
 
   function exportReport() {
     const rows: (string | number | null)[][] = [
-      ["Tipo", "Nome", "Leads", "Chamadas", "Interessados", "Contratos submetidos", "Contratos validados", "Taxa de validação"],
-      ...campaignReport.map(x => ["Campanha", x.codigo + " - " + x.nome, x.leads, x.calls, x.interested, x.submitted, x.validated, x.conversion]),
+      ["Tipo", "Nome", "Leads", "Chamadas", "Interessados", "Contratos submetidos", "Contratos validados", "Taxa de validação", "Despesas", "Custo por validação"],
+      ...campaignReport.map(x => ["Campanha", x.codigo + " - " + x.nome, x.leads, x.calls, x.interested, x.submitted, x.validated, x.conversion, operatorFilter === "all" ? x.expenses : "—", operatorFilter === "all" ? x.costPerValidated : "—"]),
       ...operatorReport.map(x => ["Operador", x.nome || x.email, "", x.calls, x.interested, x.submitted, x.validated, pct(x.validated, x.submitted)]),
     ];
     csvDownload("maima-relatorio-operacional-" + from + "-a-" + to + ".csv", rows);
@@ -358,7 +359,7 @@ export default function RelatoriosPage() {
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full min-w-[620px] text-left text-sm">
                     <thead><tr className="border-b text-xs text-slate-500"><th className="py-2 pr-3">Campanha</th><th className="py-2 pr-3">Leads</th><th className="py-2 pr-3">Chamadas</th><th className="py-2 pr-3">Interessados</th><th className="py-2 pr-3">Contratos</th><th className="py-2 pr-3">Validados</th><th className="py-2 pr-3">Despesas</th><th className="py-2">Custo/validado</th></tr></thead>
-                    <tbody>{campaignReport.map(c => <tr key={c.id} className="border-b last:border-0"><td className="py-3 pr-3"><strong>{c.codigo}</strong><p className="text-xs text-slate-500">{c.nome}</p></td><td className="py-3 pr-3">{c.leads}</td><td className="py-3 pr-3">{c.calls}</td><td className="py-3 pr-3">{c.interested}</td><td className="py-3 pr-3">{c.submitted}</td><td className="py-3 pr-3">{c.validated} <span className="text-xs text-slate-500">({c.conversion})</span></td><td className="py-3 pr-3">{c.expenses}</td><td className="py-3">{c.costPerValidated}</td></tr>)}</tbody>
+                    <tbody>{campaignReport.map(c => <tr key={c.id} className="border-b last:border-0"><td className="py-3 pr-3"><strong>{c.codigo}</strong><p className="text-xs text-slate-500">{c.nome}</p></td><td className="py-3 pr-3">{c.leads}</td><td className="py-3 pr-3">{c.calls}</td><td className="py-3 pr-3">{c.interested}</td><td className="py-3 pr-3">{c.submitted}</td><td className="py-3 pr-3">{c.validated} <span className="text-xs text-slate-500">({c.conversion})</span></td><td className="py-3 pr-3">{operatorFilter === "all" ? c.expenses : "—"}</td><td className="py-3">{operatorFilter === "all" ? c.costPerValidated : "—"}</td></tr>)}</tbody>
                   </table>
                   {campaignReport.length === 0 && <p className="py-5 text-sm text-slate-500">Não existem campanhas para este filtro.</p>}
                 </div>
