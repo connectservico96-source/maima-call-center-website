@@ -10,7 +10,7 @@ A MAIMA tem uma camada de entrada independente do fornecedor. O fornecedor ainda
 2. Um adaptador específico converte o payload do fornecedor para o contrato interno definido em `lib/telefonia/types.ts`.
 3. A rota valida o token de integração, valida o formato e regista o evento em `public.maima_telefonia_eventos`.
 4. O par fornecedor + ID do evento é único; reenvios do mesmo evento não criam duplicados.
-5. A associação a uma lead e a um operador MAIMA será feita depois de conhecermos os identificadores, as regras e a API do fornecedor.
+5. A função de associação procura uma correspondência exata do telefone com as leads; só associa automaticamente quando encontra uma única lead.\n6. O operador é obtido pelo mapeamento explícito da referência externa do agente; se não existir, usa o operador atualmente atribuído à lead.\n7. Se houver mais de uma lead com o mesmo número, o evento fica marcado como ambíguo e não escolhe uma lead por aproximação.
 
 ## Formato normalizado
 
@@ -46,14 +46,14 @@ O token Bearer é um mecanismo inicial genérico. Se o fornecedor exigir assinat
 - A rota não guarda payload bruto, gravações, URLs de gravação ou transcrições.
 - O acesso de leitura e atualização à caixa de eventos fica limitado a administradores e coordenadores.
 - A chave service role nunca é usada no navegador.
-- A associação automática a leads/operadores não é feita por aproximação de nomes; será implementada com mapeamentos confirmados.
+- A associação de lead usa igualdade exata dos dígitos do telefone, ignorando espaços e símbolos; não usa aproximações de nome.\n- Correspondências ambíguas não são associadas automaticamente.\n- O mapeamento de agentes externos é gerido por administração/coordenação em `/admin/telefonia/mapeamentos`.\n- A associação não cria por si só um registo em `maima_chamadas`, nem altera autorização de contacto, consentimento ou estado da lead.
 - Gravações e transcrições exigem análise contratual, consentimento, retenção e enquadramento legal aplicável em Angola e Portugal.
 
 ## O que falta quando o fornecedor for selecionado
 
 - Confirmar nome do produto, plano e API/webhooks disponíveis.
 - Implementar e testar o adaptador oficial e a validação de assinatura.
-- Mapear IDs externos de agentes para utilizadores MAIMA.
-- Definir como associar chamadas às leads, incluindo regras para números partilhados/ocultos.
+- Registar os IDs externos de agentes em `/admin/telefonia/mapeamentos` e associá-los aos operadores MAIMA.
+- Rever manualmente eventos sem telefone, com números partilhados ou com mais de uma lead correspondente.
 - Testar chamadas de entrada e saída, estados finais, duração, reenvios e falhas.
 - Decidir, separadamente, se haverá gravação e como será gerida a retenção.
