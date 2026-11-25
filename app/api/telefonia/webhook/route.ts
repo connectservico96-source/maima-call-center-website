@@ -16,11 +16,9 @@ function tokenValido(received: string | null, expected: string): boolean {
 
 async function lerPayloadLimitado(request: Request): Promise<unknown> {
   if (!request.body) throw new Error("empty_body");
-
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let totalBytes = 0;
-
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -35,14 +33,12 @@ async function lerPayloadLimitado(request: Request): Promise<unknown> {
   } finally {
     reader.releaseLock();
   }
-
   const bytes = new Uint8Array(totalBytes);
   let offset = 0;
   for (const chunk of chunks) {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-
   return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
 }
 
@@ -50,13 +46,11 @@ export async function POST(request: Request) {
   const webhookToken = process.env.MAIMA_TELEFONIA_WEBHOOK_TOKEN;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
   if (!webhookToken || !supabaseUrl || !serviceRoleKey) {
     return Response.json({ error: "Integração telefónica ainda não configurada." }, { status: 503 });
   }
 
-  const authorization = request.headers.get("authorization");
-  const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null;
+  const bearer = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null;
   if (!tokenValido(bearer, webhookToken)) {
     return Response.json({ error: "Não autorizado." }, { status: 401 });
   }
@@ -85,14 +79,24 @@ export async function POST(request: Request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { error } = await supabase
+  const { data: saved, error: saveError } = await supabase
     .from("maima_telefonia_eventos")
-    .upsert(evento, { onConflict: "fornecedor,evento_externo_id", ignoreDuplicates: true });
+    .upsert(evento, { onConflict: "fornecedor,evento_externo_id" })
+    .select("id")
+    .single();
 
-  if (error) {
-    console.error("Falha ao guardar evento telefónico:", error.message);
+  if (saveError || !saved) {
+    console.error("Falha ao guardar evento telefónico:", saveError?.message);
     return Response.json({ error: "Não foi possível registar o evento." }, { status: 502 });
   }
 
-  return Response.json({ ok: true, recebido: true }, { status: 202 });
+  const { error: associationError } = await supabase.rpc("maima_associar_evento_telefonia", {
+    p_evento_id: saved.id,
+  });
+  if (associationError) {
+    console.error("Evento guardado, mas a associação automática falhou:", associationError.message);
+    return Response.json({ ok: true, recebido: true, associacao: "pendente" }, { status: 202 });
+  }
+
+  return Response.json({ ok: true, recebido: true, associacao: "processada" }, { status: 202 });
 }
