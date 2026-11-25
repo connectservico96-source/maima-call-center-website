@@ -56,7 +56,7 @@ export async function POST(request: Request) {
   }
 
   const authorization = request.headers.get("authorization");
-  const bearer = authorization?.match(/^Bearer\\s+(.+)$/i)?.[1] ?? null;
+  const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null;
   if (!tokenValido(bearer, webhookToken)) {
     return Response.json({ error: "Não autorizado." }, { status: 401 });
   }
