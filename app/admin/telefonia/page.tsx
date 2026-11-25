@@ -6,9 +6,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 type Perfil={nome:string|null;email:string;role:string;ativo:boolean};
-type Evento={id:string;fornecedor:string;evento_externo_id:string;chamada_externa_id:string;telefone:string|null;direcao:"entrada"|"saida";chamada_em:string;duracao_segundos:number|null;resultado:string|null;estado_integracao:string;recebido_em:string};
+type Evento={id:string;fornecedor:string;evento_externo_id:string;chamada_externa_id:string;telefone:string|null;direcao:"entrada"|"saida";chamada_em:string;duracao_segundos:number|null;resultado:string|null;estado_integracao:string;recebido_em:string;lead_id:string|null;operador_id:string|null;associacao_estado:string};
 
-const estadoLabel:Record<string,string>={recebida:"Recebida",em_analise:"Em análise",associada:"Associada",ignorada:"Ignorada",erro:"Erro"};
+const estadoLabel:Record<string,string>={associada:"Associada",ambigua:"Correspondência ambígua",sem_correspondencia:"Sem correspondência",pendente:"Pendente"};
 const duracao=(seconds:number|null)=>seconds===null?"—":String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");
 const data=(value:string)=>new Intl.DateTimeFormat("pt-PT",{dateStyle:"short",timeStyle:"short"}).format(new Date(value));
 
@@ -29,7 +29,7 @@ export default function TelefoniaPage(){
     if(!["admin","coordenador"].includes(me.role)){router.replace(me.role==="cliente"?"/cliente/painel":"/admin/operacao");return;}
     setProfile(me as Perfil);
     const {data,error:eventsError}=await db.from("maima_telefonia_eventos")
-      .select("id,fornecedor,evento_externo_id,chamada_externa_id,telefone,direcao,chamada_em,duracao_segundos,resultado,estado_integracao,recebido_em")
+      .select("id,fornecedor,evento_externo_id,chamada_externa_id,telefone,direcao,chamada_em,duracao_segundos,resultado,estado_integracao,recebido_em,lead_id,operador_id,associacao_estado")
       .order("recebido_em",{ascending:false}).limit(100);
     if(eventsError)setError("Não foi possível carregar os eventos: "+eventsError.message);
     setEvents((data??[]) as Evento[]);
@@ -47,7 +47,7 @@ export default function TelefoniaPage(){
         <div><p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-700">MAIMA CALL CENTER</p><h1 className="mt-1 text-xl font-bold">Integração telefónica</h1><p className="mt-1 text-xs text-slate-500">{profile.nome||profile.email} · {profile.role}</p></div>
         <nav className="flex flex-wrap gap-2">
           <Link href="/admin/operacao" className="rounded-lg border px-3 py-2 text-sm font-semibold">CRM operacional</Link>
-          <Link href="/admin/relatorios" className="rounded-lg border px-3 py-2 text-sm font-semibold">Relatórios</Link>
+          <Link href="/admin/relatorios" className="rounded-lg border px-3 py-2 text-sm font-semibold">Relatórios</Link>\n          <Link href="/admin/telefonia/mapeamentos" className="rounded-lg border px-3 py-2 text-sm font-semibold">Mapear operadores</Link>
           <button onClick={()=>void load()} className="rounded-lg bg-[#103B70] px-3 py-2 text-sm font-semibold text-white">Atualizar</button>
         </nav>
       </div>
@@ -65,7 +65,7 @@ export default function TelefoniaPage(){
         </div>
         {events.length===0?<div className="rounded-xl border border-dashed border-slate-300 p-8 text-center"><p className="font-semibold text-slate-700">Ainda não existem eventos telefónicos</p><p className="mt-1 text-sm text-slate-500">Esta lista começará a receber dados depois de o fornecedor ser configurado e ligado.</p></div>:
           <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm">
-            <thead><tr className="border-b text-xs uppercase tracking-wide text-slate-500"><th className="px-3 py-3">Data da chamada</th><th className="px-3 py-3">Fornecedor / ID</th><th className="px-3 py-3">Telefone</th><th className="px-3 py-3">Direção</th><th className="px-3 py-3">Duração</th><th className="px-3 py-3">Resultado</th><th className="px-3 py-3">Estado</th></tr></thead>
+            <thead><tr className="border-b text-xs uppercase tracking-wide text-slate-500"><th className="px-3 py-3">Data da chamada</th><th className="px-3 py-3">Fornecedor / ID</th><th className="px-3 py-3">Telefone</th><th className="px-3 py-3">Direção</th><th className="px-3 py-3">Duração</th><th className="px-3 py-3">Resultado</th><th className="px-3 py-3">Lead</th><th className="px-3 py-3">Operador</th><th className="px-3 py-3">Associação</th></tr></thead>
             <tbody>{events.map(event=><tr key={event.id} className="border-b last:border-0">
               <td className="px-3 py-3 whitespace-nowrap">{data(event.chamada_em)}</td>
               <td className="px-3 py-3"><p className="font-semibold">{event.fornecedor}</p><p className="max-w-[190px] truncate text-xs text-slate-500" title={event.chamada_externa_id}>{event.chamada_externa_id}</p></td>
@@ -73,11 +73,11 @@ export default function TelefoniaPage(){
               <td className="px-3 py-3">{event.direcao==="entrada"?"Recebida":"Efetuada"}</td>
               <td className="px-3 py-3 tabular-nums">{duracao(event.duracao_segundos)}</td>
               <td className="px-3 py-3">{event.resultado||"—"}</td>
-              <td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold">{estadoLabel[event.estado_integracao]||event.estado_integracao}</span></td>
+              <td className="px-3 py-3 text-xs">{event.lead_id||"—"}</td>\n              <td className="px-3 py-3 text-xs">{event.operador_id||"—"}</td>\n              <td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold">{estadoLabel[event.associacao_estado]||event.associacao_estado}</span></td>
             </tr>)}</tbody>
           </table></div>}
       </section>
-      <p className="mt-4 text-xs text-slate-500">Por segurança, esta fase não importa gravações nem transcrições e ainda não associa automaticamente eventos a leads ou operadores.</p>
+      <p className="mt-4 text-xs text-slate-500">Os eventos são associados automaticamente apenas quando o telefone corresponde exatamente a uma única lead. Referências externas de agentes precisam de mapeamento explícito. Correspondências ambíguas ficam assinaladas para revisão. Não são importadas gravações nem transcrições.</p>
     </section>
   </main>;
 }
